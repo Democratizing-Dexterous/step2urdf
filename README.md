@@ -40,6 +40,10 @@ It combines precise geometric feature extraction with intuitive configuration an
 - 🔧 **Revolute and prismatic joint support**
   Fully supports both joint types for flexible robot modeling.
 
+## Video Tutorial
+
+[bilibili](https://www.bilibili.com/video/BV168PjzrErB?vd_source=b2a1004302917395bdd25677ed784bdb)
+
 ## Usage
 
 ### pnpm
