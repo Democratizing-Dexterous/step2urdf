@@ -43,7 +43,29 @@ It combines precise geometric feature extraction with intuitive configuration an
 ## Usage
 
 ### pnpm
+#### Install  dependencies
 
+```sh
+pnpm install
+```
+
+#### Compile and Hot-Reload for Development
+
+```sh
+pnpm dev
+```
+
+#### Type-Check, Compile and Minify for Production
+
+```sh
+pnpm build
+```
+
+#### Lint 
+
+```sh
+pnpm lint
+```
 ### Using release
 
 Download the release, extract the files, and navigate to the extracted folder. Then run `python -m http.server` and open `127.0.0.1:8000` in your browser.
