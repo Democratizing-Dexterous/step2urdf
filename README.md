@@ -2,7 +2,7 @@
 
 **The ultimate tool for converting STEP files to URDF.**
 
-The online version is [Here](http://124.220.40.149:8888). Try it!
+The online version is [https://step2urdf.top](https://step2urdf.top). Try it!
 
 ## Overview
 
