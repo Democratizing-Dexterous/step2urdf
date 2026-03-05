@@ -4,6 +4,8 @@
 
 The online version is [https://step2urdf.top](https://step2urdf.top). Try it!
 
+The domain name is currently undergoing registration. Please temporarily use [http://124.220.40.149:8888](http://124.220.40.149:8888)
+
 ## Overview
 
 **URDFlyS2U** provides a new, user‑friendly way to export CAD (STEP) designs to URDF, making robot model creation faster and more accurate.
