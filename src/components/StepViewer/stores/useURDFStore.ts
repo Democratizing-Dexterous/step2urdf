@@ -6,11 +6,9 @@ import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import * as THREE from 'three'
 import type {
-  ViewMode,
   URDFRobot,
   URDFLink,
   URDFJoint,
-  URDFChain,
   JointType,
   URDFOrigin,
   JointLimits,
@@ -37,9 +35,6 @@ export interface URDFTreeNode {
 }
 
 export const useURDFStore = defineStore('urdf', () => {
-  // ============ 视图模式 ============
-  const viewMode = ref<ViewMode>('preview')
-
   // ============ 机器人模型 ============
   const robot = ref<URDFRobot>({
     name: 'robot',
@@ -56,7 +51,6 @@ export const useURDFStore = defineStore('urdf', () => {
   // ============ UI 状态 ============
   const selectedLinkId = ref<string | null>(null)
   const selectedJointId = ref<string | null>(null)
-  const selectedChainId = ref<string | null>(null)
 
   /** Solid 绑定模式 */
   const bindingMode = ref<BindingModeState>({ active: false, targetLinkId: null })
@@ -166,40 +160,9 @@ export const useURDFStore = defineStore('urdf', () => {
   /** el-tree 格式的拓扑树，供 URDFLeftPanel 直接消费 */
   const treeData = computed<URDFTreeNode[]>(() => rootLinks.value.map(l => buildLinkNode(l.id)))
 
-  /** 自动计算运动链：从每个根节点到每个叶节点的路径 */
-  const chains = computed<URDFChain[]>(() => {
-    const result: URDFChain[] = []
-    let chainIdx = 0
-
-    for (const root of rootLinks.value) {
-      const paths = findPathsToLeaves(root.id)
-      for (const path of paths) {
-        chainIdx++
-        const linkIds = path.linkIds
-        const jointIds = path.jointIds
-        const firstName = linkMap.value.get(linkIds[0])?.name || linkIds[0]
-        const lastName = linkMap.value.get(linkIds[linkIds.length - 1])?.name || linkIds[linkIds.length - 1]
-        result.push({
-          id: `chain_${chainIdx}`,
-          name: `Chain ${chainIdx}: ${firstName} → ${lastName}`,
-          linkIds,
-          jointIds
-        })
-      }
-    }
-
-    return result
-  })
-
   /** 可用的非 fixed 关节列表（用于滑块面板） */
   const activeJoints = computed(() => {
     return robot.value.joints.filter(j => j.type !== 'fixed')
-  })
-
-  /** 当前选中的 Chain 对象 */
-  const selectedChain = computed(() => {
-    if (!selectedChainId.value) return null
-    return chains.value.find(c => c.id === selectedChainId.value) || null
   })
 
   /** 已绑定的 Solid ID 集合 */
@@ -208,28 +171,6 @@ export const useURDFStore = defineStore('urdf', () => {
     robot.value.links.forEach(l => l.solidIds.forEach(id => ids.add(id)))
     return ids
   })
-
-  // ============ 辅助函数 ============
-
-  /** DFS 找从 linkId 到所有叶节点的路径 */
-  function findPathsToLeaves(linkId: string): { linkIds: string[]; jointIds: string[] }[] {
-    const childJoints = parentJointMap.value.get(linkId)
-    if (!childJoints || childJoints.length === 0) {
-      return [{ linkIds: [linkId], jointIds: [] }]
-    }
-
-    const results: { linkIds: string[]; jointIds: string[] }[] = []
-    for (const joint of childJoints) {
-      const subPaths = findPathsToLeaves(joint.childLinkId)
-      for (const sub of subPaths) {
-        results.push({
-          linkIds: [linkId, ...sub.linkIds],
-          jointIds: [joint.id, ...sub.jointIds]
-        })
-      }
-    }
-    return results
-  }
 
   // ============ Link CRUD ============
 
@@ -324,6 +265,7 @@ export const useURDFStore = defineStore('urdf', () => {
     childLinkId: string
     origin: URDFOrigin
     axis: [number, number, number]
+    axisOffset?: [number, number, number]
     limits?: JointLimits
   }): { ok: true; joint: URDFJoint } | { ok: false; reason: string } {
     const err = validateJoint(config.parentLinkId, config.childLinkId)
@@ -338,6 +280,7 @@ export const useURDFStore = defineStore('urdf', () => {
       childLinkId: config.childLinkId,
       origin: config.origin,
       axis: config.axis,
+      axisOffset: config.axisOffset || [0, 0, 0],
       limits: config.limits || (
         config.type === 'prismatic'
           ? { lower: -100, upper: 100, effort: 100, velocity: 100 }
@@ -417,7 +360,6 @@ export const useURDFStore = defineStore('urdf', () => {
     robot.value = imported
     selectedLinkId.value = null
     selectedJointId.value = null
-    selectedChainId.value = null
     baseLinkOrigin.value = null
     basePickMode.value = false
     // 重设 ID 计数器
@@ -450,7 +392,6 @@ export const useURDFStore = defineStore('urdf', () => {
     }
     selectedLinkId.value = null
     selectedJointId.value = null
-    selectedChainId.value = null
     bindingMode.value = { active: false, targetLinkId: null }
     jointWizardVisible.value = false
     jointWizardStep.value = 'select-links'
@@ -472,11 +413,9 @@ export const useURDFStore = defineStore('urdf', () => {
     BASE_LINK_ID,
 
     // 状态
-    viewMode,
     robot,
     selectedLinkId,
     selectedJointId,
-    selectedChainId,
     bindingMode,
     jointWizardVisible,
     jointWizardStep,
@@ -499,9 +438,7 @@ export const useURDFStore = defineStore('urdf', () => {
     parentJointMap,
     rootLinks,
     leafLinks,
-    chains,
     activeJoints,
-    selectedChain,
     boundSolidIds,
     treeData,
 

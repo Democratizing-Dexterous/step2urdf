@@ -99,44 +99,25 @@
 
       <el-divider direction="vertical" />
 
-      <!-- 选择粒度 -->
-      <div class="granularity-control">
-        <el-button-group>
-          <el-button :type="granularityMode === 'solid' ? 'primary' : 'default'"
-            @click="$emit('granularityChange', 'solid')">
-            实体
-          </el-button>
-          <el-button :type="granularityMode === 'edge' ? 'primary' : 'default'"
-            @click="$emit('granularityChange', 'edge')">
-            边
-          </el-button>
-        </el-button-group>
-      </div>
-
-      <el-divider direction="vertical" />
-
       <!-- 画线测量 -->
       <el-tooltip content="画线测量（点击模型/空间画直线，自动计算距离）" placement="bottom">
         <el-button :type="isLineMeasureActive ? 'warning' : 'default'" @click="$emit('toggleLineMeasure')" text>
-          📏 画线测量
+          画线测量
+        </el-button>
+      </el-tooltip>
+
+      <el-divider direction="vertical" />
+
+      <!-- 模型结构树面板切换 -->
+      <el-tooltip content="打开/关闭模型结构树面板" placement="bottom">
+        <el-button :type="isModelTreeOpen ? 'primary' : 'default'" @click="$emit('toggleModelTree')" text>
+          模型树
         </el-button>
       </el-tooltip>
     </div>
 
     <!-- 右侧：清空/重置 + FPS -->
     <div class="toolbar-right" v-if="hasModel">
-      <!-- 视图模式切换 -->
-      <el-button-group>
-        <el-button :type="viewMode === 'preview' ? 'primary' : 'default'" @click="$emit('switchViewMode', 'preview')">
-          预览
-        </el-button>
-        <el-button :type="viewMode === 'urdf' ? 'primary' : 'default'" @click="$emit('switchViewMode', 'urdf')">
-          URDF
-        </el-button>
-      </el-button-group>
-
-      <el-divider direction="vertical" />
-
       <el-tooltip content="取消选择" placement="bottom">
         <el-button @click="$emit('clearSelection')" :disabled="!hasSelection" text>
           取消选择
@@ -186,7 +167,7 @@ import {
   CircleCheckFilled,
   WarningFilled
 } from '@element-plus/icons-vue'
-import type { GranularityMode, ViewMode } from '../types'
+// Types removed: GranularityMode, ViewMode no longer needed
 
 const props = defineProps<{
   fileName: string
@@ -202,12 +183,10 @@ const props = defineProps<{
   occtLoadProgress?: number
   /** 画线测量模式是否激活 */
   isLineMeasureActive?: boolean
+  /** 模型结构树面板是否打开 */
+  isModelTreeOpen?: boolean
   /** 当前透明度（0~100） */
   opacity?: number
-  /** 当前选择粒度模式 */
-  granularityMode?: GranularityMode
-  /** 当前视图模式 */
-  viewMode?: ViewMode
 }>()
 
 const emit = defineEmits<{
@@ -216,12 +195,11 @@ const emit = defineEmits<{
   (e: 'toggleAxes'): void
   (e: 'toggleGrid'): void
   (e: 'opacityChange', value: number): void
-  (e: 'granularityChange', mode: GranularityMode): void
   (e: 'clearSelection'): void
   (e: 'resetView'): void
   (e: 'toggleStats'): void
   (e: 'toggleLineMeasure'): void
-  (e: 'switchViewMode', mode: ViewMode): void
+  (e: 'toggleModelTree'): void
 }>()
 
 const localOpacity = ref(props.opacity ?? 100)
@@ -368,11 +346,6 @@ function openGitHub(): void {
       --el-slider-height: 4px;
       --el-slider-button-size: 14px;
     }
-  }
-
-  .granularity-control {
-    display: flex;
-    align-items: center;
   }
 
   .axis-scale-control {

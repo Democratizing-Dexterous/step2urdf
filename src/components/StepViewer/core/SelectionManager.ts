@@ -63,7 +63,6 @@ export interface SelectionManagerConfig {
   /** ArcballControls 引用，用于精确检测拖动/旋转操作 */
   controls?: ArcballControls
   highlightColor?: number
-  // hoverColor?: number
   selectionColor?: number
   /** hover / 选择变化后请求重新渲染 */
   onRenderRequest?: () => void
@@ -92,7 +91,6 @@ export class SelectionManager {
 
   // 颜色配置
   private highlightColor: number
-  // private hoverColor: number
   private selectionColor: number
 
   // 选择状态
@@ -193,7 +191,6 @@ export class SelectionManager {
       ; (this.raycaster as any).firstHitOnly = true
 
     this.highlightColor = config.highlightColor ?? 0x00ff00
-    // this.hoverColor = config.hoverColor ?? 0x88ff88
     this.selectionColor = config.selectionColor ?? 0xff8800
 
     // RAF 节流的 hover 检测
@@ -384,7 +381,6 @@ export class SelectionManager {
       const material = mesh.material as THREE.MeshStandardMaterial
       if (material && material.emissive) {
         this.originalEmissive = material.emissive.clone()
-        // material.emissive.setHex(this.hoverColor)
         material.emissiveIntensity = 0.3
       }
     }
@@ -549,7 +545,7 @@ export class SelectionManager {
   private updateCachedTopologyEdges(): void {
     const edgeSet = new Set<THREE.LineSegments>()
     this.solids.forEach(s => {
-      if (s.topologyEdges) edgeSet.add(s.topologyEdges)
+      if (s.visible && s.topologyEdges) edgeSet.add(s.topologyEdges)
     })
     this.cachedTopologyEdges = Array.from(edgeSet)
   }
@@ -1004,6 +1000,34 @@ export class SelectionManager {
       selections: this.getSelections(),
       selectedTreeNodeIds: treeIds
     })
+  }
+
+  /**
+   * 从模型树 hover Solid → 临时边缘线高亮（不影响选中状态）
+   * solidId = null 则清除 hover
+   */
+  hoverBySolidId(solidId: string | null): void {
+    // 清除旧的 hover
+    if (this.hoveredSolid && !this.hoveredSolid.selected) {
+      this.hoverSolidEdgeLines(this.hoveredSolid, false)
+    }
+    this.hoveredFeature = null
+    this.hoveredMesh = null
+    this.hoveredBrepFaceIndex = -1
+
+    if (!solidId) {
+      this.hoveredSolid = null
+      return
+    }
+
+    const solid = this.solidIdMap.get(solidId)
+    if (!solid || solid.selected) {
+      this.hoveredSolid = null
+      return
+    }
+
+    this.hoveredSolid = solid
+    this.hoverSolidEdgeLines(solid, true)
   }
 
   /**
@@ -1770,6 +1794,13 @@ export class SelectionManager {
     if (solid) {
       solid.visible = visible
       solid.mesh.visible = visible
+      // 隐藏/显示 solid 的拓扑边线
+      if (solid.topologyEdges) {
+        solid.topologyEdges.visible = visible
+      }
+      // 重新构建射线检测缓存，确保隐藏的 mesh 不会遮挡后方模型
+      this.updateCachedMeshes()
+      this.updateCachedTopologyEdges()
     }
   }
 

@@ -6,25 +6,27 @@
 
 <template>
   <Teleport to="body">
-    <div v-show="visible" class="fk-floating-panel" :style="panelStyle" @mousedown.stop>
-      <!-- 标题栏（可拖拽） -->
-      <div class="fk-title-bar" @mousedown="startDrag">
-        <span class="fk-title">🎛️ 关节控制</span>
-        <div class="fk-title-actions">
-          <el-button size="small" text @click.stop="urdfStore.resetJoints()">归零</el-button>
-          <el-button size="small" text @click.stop="urdfStore.randomizeJoints()">随机</el-button>
-          <el-button size="small" text circle @click="$emit('close')">✕</el-button>
+    <Transition name="fk-panel">
+      <div v-show="visible" class="fk-floating-panel" :style="panelStyle" @mousedown.stop>
+        <!-- 标题栏（可拖拽） -->
+        <div class="fk-title-bar" @mousedown="startDrag">
+          <span class="fk-title">🎛️ 关节控制</span>
+          <div class="fk-title-actions">
+            <el-button size="small" text @click.stop="urdfStore.resetJoints()">归零</el-button>
+            <el-button size="small" text @click.stop="urdfStore.randomizeJoints()">随机</el-button>
+            <el-button size="small" text circle @click="$emit('close')">✕</el-button>
+          </div>
         </div>
-      </div>
 
-      <!-- 关节滑块列表 -->
-      <div class="fk-body">
-        <div v-if="urdfStore.activeJoints.length > 0" class="slider-list">
-          <JointSlider v-for="joint in urdfStore.activeJoints" :key="joint.id" :joint="joint" />
+        <!-- 关节滑块列表 -->
+        <div class="fk-body">
+          <div v-if="urdfStore.activeJoints.length > 0" class="slider-list">
+            <JointSlider v-for="joint in urdfStore.activeJoints" :key="joint.id" :joint="joint" />
+          </div>
+          <div v-else class="empty-hint">暂无可控关节</div>
         </div>
-        <div v-else class="empty-hint">暂无可控关节</div>
       </div>
-    </div>
+    </Transition>
   </Teleport>
 </template>
 
@@ -43,9 +45,9 @@ defineEmits<{
 
 const urdfStore = useURDFStore()
 
-// 面板位置
-const posX = ref(window.innerWidth - 360)
-const posY = ref(window.innerHeight - 400)
+// 面板位置（居中偏右）
+const posX = ref(Math.max(40, Math.min(window.innerWidth - 360, window.innerWidth * 0.6)))
+const posY = ref(Math.max(40, window.innerHeight - 460))
 
 const panelStyle = computed(() => ({
   left: `${posX.value}px`,
@@ -118,10 +120,10 @@ function startDrag(e: MouseEvent): void {
 }
 
 .fk-body {
-
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 8px;
-  height: 600px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -147,5 +149,23 @@ function startDrag(e: MouseEvent): void {
   color: #909399;
   text-align: center;
   padding: 12px 0;
+}
+
+.fk-panel-enter-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.fk-panel-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.fk-panel-enter-from {
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+}
+
+.fk-panel-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
 }
 </style>

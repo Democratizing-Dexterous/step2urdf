@@ -5,9 +5,6 @@
 export { StepLoader, preloadOcct, isOcctLoaded, terminateWorker } from './StepLoader'
 export { SceneManager } from './SceneManager'
 export { SelectionManager } from './SelectionManager'
-export { FeatureDetector } from './FeatureDetector'
-export { AuxiliaryVisualizer } from './AuxiliaryVisualizer'
-export { MeasurementTool } from './MeasurementTool'
 export { LineMeasurementTool } from './LineMeasurementTool'
 export { FrameVisualizer } from './FrameVisualizer'
 export { ForwardKinematics } from './ForwardKinematics'
@@ -23,8 +20,6 @@ export {
 
 export type { SceneManagerConfig } from './SceneManager'
 export type { SelectionManagerConfig, SelectionEvent } from './SelectionManager'
-export type { AuxiliaryVisualizerConfig } from './AuxiliaryVisualizer'
-export type { MeasurementToolConfig } from './MeasurementTool'
 export type { LineMeasurementToolConfig, LineMeasurementData } from './LineMeasurementTool'
 export type { RendererType, UniversalRenderer, RendererConfig, RendererResult } from './RendererFactory'
 export type { InertiaWorkerApi } from './InertiaWorker'

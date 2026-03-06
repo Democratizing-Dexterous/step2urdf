@@ -1,7 +1,7 @@
 <template>
   <div class="links-module">
     <div class="module-header">
-      <span class="module-title">📦 Links</span>
+      <span class="module-title">Links</span>
       <el-button size="small" type="primary" text @click="handleAddLink">
         + Add Link
       </el-button>

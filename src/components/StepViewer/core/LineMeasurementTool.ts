@@ -39,7 +39,7 @@ export interface LineMeasurementToolConfig {
   domElement: HTMLElement
   container: HTMLElement
   controls: ArcballControls
-  labelRenderer: CSS2DRenderer
+  labelRenderer?: CSS2DRenderer
   /** 请求渲染回调 */
   onRenderRequest?: () => void
   /** 新线完成回调 */
@@ -57,7 +57,7 @@ export class LineMeasurementTool {
   private domElement: HTMLElement
   private container: HTMLElement
   private controls: ArcballControls
-  private labelRenderer: CSS2DRenderer
+  private labelRenderer?: CSS2DRenderer
   private raycaster: THREE.Raycaster
   private mouse: THREE.Vector2
 

@@ -102,6 +102,27 @@
         </div>
       </el-collapse-item>
 
+      <!-- 轴偏移（DH 参数校正） -->
+      <el-collapse-item name="axisOffset">
+        <template #title>
+          <span class="section-title">轴偏移 (Axis Offset)</span>
+        </template>
+        <div class="prop-form">
+          <div class="coord-row">
+            <span class="coord-label">xyz</span>
+            <el-input-number v-model="joint.axisOffset[0]" size="small" :step="0.001" :precision="4"
+              controls-position="right" style="width: 82px" />
+            <el-input-number v-model="joint.axisOffset[1]" size="small" :step="0.001" :precision="4"
+              controls-position="right" style="width: 82px" />
+            <el-input-number v-model="joint.axisOffset[2]" size="small" :step="0.001" :precision="4"
+              controls-position="right" style="width: 82px" />
+          </div>
+          <el-button size="small" text type="info" @click="resetAxisOffset" style="margin-top: 4px">
+            重置偏移
+          </el-button>
+        </div>
+      </el-collapse-item>
+
       <!-- 限制（非 fixed） -->
       <el-collapse-item v-if="joint.type !== 'fixed'" name="limits">
         <template #title>
@@ -152,7 +173,7 @@ const emit = defineEmits<{
 
 const urdfStore = useURDFStore()
 
-const openPanels = ref<string[]>(['basic', 'origin', 'axis', 'limits'])
+const openPanels = ref<string[]>(['basic', 'origin', 'axis', 'axisOffset', 'limits'])
 
 const joint = computed(() => {
   if (!urdfStore.selectedJointId) return null
@@ -193,6 +214,11 @@ function flipAxis(): void {
     -joint.value.axis[1],
     -joint.value.axis[2]
   ] as [number, number, number]
+}
+
+function resetAxisOffset(): void {
+  if (!joint.value) return
+  joint.value.axisOffset = [0, 0, 0]
 }
 </script>
 
@@ -305,6 +331,13 @@ function flipAxis(): void {
     width: 24px;
     flex-shrink: 0;
   }
+}
+
+.offset-hint {
+  font-size: 11px;
+  color: #909399;
+  margin: 0 0 6px;
+  line-height: 1.4;
 }
 
 .empty-hint {

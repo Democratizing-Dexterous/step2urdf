@@ -123,10 +123,18 @@ function serializeJoint(joint: URDFJoint, robot: URDFRobot, unitScale: number, o
   let xyzFinal = joint.origin.xyz as [number, number, number]
   let rpyFinal = joint.origin.rpy as [number, number, number]
 
+  // 合并 axisOffset 到 origin.xyz
+  const axOff = joint.axisOffset || [0, 0, 0]
+  xyzFinal = [
+    xyzFinal[0] + axOff[0],
+    xyzFinal[1] + axOff[1],
+    xyzFinal[2] + axOff[2]
+  ]
+
   if (isBaseChild) {
     const bpi = options!.basePoseInverse!
     const me = bpi.elements
-    const [ox, oy, oz] = joint.origin.xyz
+    const [ox, oy, oz] = xyzFinal
     // 变换平移分量： bpi 全变换（平移 + 旋转）
     xyzFinal = [
       me[0] * ox + me[4] * oy + me[8] * oz + me[12],
@@ -238,7 +246,8 @@ export function deserializeURDF(xml: string): URDFRobot {
       origin,
       axis,
       limits,
-      currentValue: 0
+      currentValue: 0,
+      axisOffset: [0, 0, 0] as [number, number, number]
     })
   })
 

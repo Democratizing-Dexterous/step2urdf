@@ -3,18 +3,15 @@
  */
 
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, markRaw } from 'vue'
 import type {
   SolidObject,
   GeometryFeature,
   SelectionInfo,
-  MeasurementResult,
   UploadProgress,
   TreeNode,
-  GranularityMode
 } from '../types'
 import type { LineMeasurementData } from '../core/LineMeasurementTool'
-import { FeatureType } from '../types'
 
 export const useStepViewerStore = defineStore('stepViewer', () => {
   // ============ 状态 ============
@@ -43,9 +40,6 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
   // 选择状态
   const selectedFeatures = ref<GeometryFeature[]>([])
 
-  // 测量状态
-  const measurements = ref<MeasurementResult[]>([])
-
   // 画线测量状态
   const lineMeasurements = ref<LineMeasurementData[]>([])
   const isLineMeasureActive = ref(false)
@@ -56,8 +50,8 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
   const globalOpacity = ref(0.3)
   const isTransparent = ref(false)
 
-  // 选择粒度模式
-  const granularityMode = ref<GranularityMode>('solid')
+  // Solid 显隐状态: solidId -> visible
+  const solidVisibilityMap = ref(new Map<string, boolean>())
 
   // ============ 计算属性 ============
 
@@ -78,15 +72,6 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
 
   // 是否可以测量（选中两个特征）
   const canMeasure = computed(() => selectedFeatures.value.length === 2)
-
-  // 获取需要显示法向线的选中特征（仅边模式下显示）
-  const featuresWithNormalLine = computed(() => {
-    if (granularityMode.value !== 'edge') return []
-    return selectedFeatures.value.filter(f =>
-      [FeatureType.CIRCLE, FeatureType.ARC, FeatureType.CYLINDER].includes(f.type) ||
-      (f.edgeIndex !== undefined && f.edgeCurveType === 'circle')
-    )
-  })
 
   // 所有特征的类型统计
   const featureStats = computed(() => {
@@ -142,8 +127,15 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
 
   /**
    * 设置模型数据
+   * ★ 将大对象 (mesh, serializedData 等) 标记为非响应式，避免 Vue Proxy 包裹导致的性能开销
    */
   function setSolids(newSolids: SolidObject[]): void {
+    for (const solid of newSolids) {
+      if (solid.mesh) markRaw(solid.mesh)
+      if (solid.serializedData) markRaw(solid.serializedData as any)
+      if (solid.edgeLines) markRaw(solid.edgeLines)
+      if (solid.topologyEdges) markRaw(solid.topologyEdges)
+    }
     solids.value = newSolids
   }
 
@@ -213,13 +205,13 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
     solids.value = []
     currentFileName.value = ''
     selectedFeatures.value = []
-    measurements.value = []
     lineMeasurements.value = []
     isLineMeasureActive.value = false
     isTransparent.value = false
     treeNodes.value = []
     selectedTreeNodeIds.value = []
     expandedTreeNodeIds.value = []
+    solidVisibilityMap.value = new Map()
     uploadProgress.value = {
       status: 'idle',
       progress: 0,
@@ -235,54 +227,11 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
   }
 
   /**
-   * 添加选中的特征
-   */
-  function addSelectedFeature(feature: GeometryFeature): void {
-    if (!selectedFeatures.value.find(f => f.id === feature.id)) {
-      selectedFeatures.value.push(feature)
-    }
-  }
-
-  /**
-   * 移除选中的特征
-   */
-  function removeSelectedFeature(featureId: string): void {
-    const index = selectedFeatures.value.findIndex(f => f.id === featureId)
-    if (index > -1) {
-      selectedFeatures.value.splice(index, 1)
-    }
-  }
-
-  /**
    * 清空选择
    */
   function clearSelection(): void {
     selectedFeatures.value = []
     selectedTreeNodeIds.value = []
-  }
-
-  /**
-   * 添加测量结果
-   */
-  function addMeasurement(result: MeasurementResult): void {
-    measurements.value.push(result)
-  }
-
-  /**
-   * 移除测量结果
-   */
-  function removeMeasurement(id: string): void {
-    const index = measurements.value.findIndex(m => m.id === id)
-    if (index > -1) {
-      measurements.value.splice(index, 1)
-    }
-  }
-
-  /**
-   * 清空所有测量
-   */
-  function clearMeasurements(): void {
-    measurements.value = []
   }
 
   // ========== 画线测量 ==========
@@ -304,6 +253,23 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
     isLineMeasureActive.value = active
   }
 
+
+  /**
+   * 切换 Solid 显隐状态
+   */
+  function toggleSolidVisibility(solidId: string): void {
+    const current = solidVisibilityMap.value.get(solidId) ?? true
+    solidVisibilityMap.value.set(solidId, !current)
+    // 触发响应式更新
+    solidVisibilityMap.value = new Map(solidVisibilityMap.value)
+  }
+
+  /**
+   * 获取 Solid 是否可见
+   */
+  function isSolidVisible(solidId: string): boolean {
+    return solidVisibilityMap.value.get(solidId) ?? true
+  }
 
   /**
    * 切换侧栏可见性
@@ -331,13 +297,6 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
   }
 
   /**
-   * 设置选择粒度模式
-   */
-  function setGranularityMode(mode: GranularityMode): void {
-    granularityMode.value = mode
-  }
-
-  /**
    * 设置全局透明度
    */
   function setGlobalOpacity(opacity: number): void {
@@ -351,54 +310,6 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
     isTransparent.value = value
   }
 
-  /**
-   * 切换透明模式
-   */
-  function toggleTransparent(): boolean {
-    isTransparent.value = !isTransparent.value
-    return isTransparent.value
-  }
-
-  /**
-   * 设置单个 Solid 的透明度
-   */
-  function setSolidOpacity(solidId: string, opacity: number): void {
-    const solid = solids.value.find(s => s.id === solidId)
-    if (solid) {
-      solid.opacity = opacity
-    }
-  }
-
-  /**
-   * 设置 Solid 可见性
-   */
-  function setSolidVisibility(solidId: string, visible: boolean): void {
-    const solid = solids.value.find(s => s.id === solidId)
-    if (solid) {
-      solid.visible = visible
-    }
-  }
-
-  /**
-   * 查找 Solid
-   */
-  function findSolid(id: string): SolidObject | undefined {
-    return solids.value.find(s => s.id === id)
-  }
-
-  /**
-   * 查找特征
-   */
-  function findFeature(featureId: string): GeometryFeature | undefined {
-    for (const solid of solids.value) {
-      const feature = solid.features.find(f => f.id === featureId)
-      if (feature) return feature
-      const edgeFeature = solid.edgeFeatures.find(f => f.id === featureId)
-      if (edgeFeature) return edgeFeature
-    }
-    return undefined
-  }
-
   return {
     // 状态
     uploadProgress,
@@ -410,14 +321,13 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
     sidePanelVisible,
     sidePanelWidth,
     selectedFeatures,
-    measurements,
     lineMeasurements,
     isLineMeasureActive,
     showAxes,
     showGrid,
     globalOpacity,
     isTransparent,
-    granularityMode,
+    solidVisibilityMap,
 
     // 计算属性
     hasModel,
@@ -425,7 +335,6 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
     firstSelectedFeature,
     secondSelectedFeature,
     canMeasure,
-    featuresWithNormalLine,
     featureStats,
     flatTreeNodes,
     selectedTreeNodeIdSet,
@@ -443,27 +352,18 @@ export const useStepViewerStore = defineStore('stepViewer', () => {
     clearTreeSelection,
     clearModel,
     setSelectedFeatures,
-    addSelectedFeature,
-    removeSelectedFeature,
     clearSelection,
-    addMeasurement,
-    removeMeasurement,
-    clearMeasurements,
     addLineMeasurement,
     removeLineMeasurement,
     clearLineMeasurements,
     setLineMeasureActive,
+    toggleSolidVisibility,
+    isSolidVisible,
     toggleSidePanel,
     setSidePanelWidth,
     setShowAxes,
     setShowGrid,
-    setGranularityMode,
     setGlobalOpacity,
     setTransparent,
-    toggleTransparent,
-    setSolidOpacity,
-    setSolidVisibility,
-    findSolid,
-    findFeature
   }
 })

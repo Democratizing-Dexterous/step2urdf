@@ -1,16 +1,7 @@
 <template>
   <Teleport to="body">
-    <div
-      v-show="urdfStore.urdfEditorVisible"
-      ref="editorWrapper"
-      class="urdf-editor-wrapper"
-      :style="wrapperStyle"
-    >
-      <div
-        ref="dragHandle"
-        class="editor-header"
-        @mousedown="startDrag"
-      >
+    <div v-show="urdfStore.urdfEditorVisible" ref="editorWrapper" class="urdf-editor-wrapper" :style="wrapperStyle">
+      <div ref="dragHandle" class="editor-header" @mousedown="startDrag">
         <span class="editor-title">📝 URDF Editor</span>
         <div class="header-actions">
           <el-button size="small" text @click="handleSave" title="下载 .urdf 文件">💾 保存</el-button>
@@ -30,15 +21,8 @@
       </div>
 
       <div class="editor-body">
-        <vue-monaco-editor
-          ref="monacoRef"
-          v-model:value="urdfXml"
-          language="xml"
-          theme="vs-dark"
-          :options="editorOptions"
-          style="height: 100%"
-          @mount="handleEditorMount"
-        />
+        <vue-monaco-editor ref="monacoRef" v-model:value="urdfXml" language="xml" theme="vs-dark"
+          :options="editorOptions" style="height: 100%" @mount="handleEditorMount" />
       </div>
 
       <!-- 拖拽调整大小 -->
@@ -243,7 +227,7 @@ onBeforeUnmount(() => {
   .el-button {
     color: #ccc;
     font-size: 11px;
-    padding: 2px 6px;
+    padding: 2px 10px;
   }
 }
 

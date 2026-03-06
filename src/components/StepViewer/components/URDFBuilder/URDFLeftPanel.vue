@@ -1,6 +1,6 @@
 <template>
   <div class="urdf-left-panel" :style="{ width: panelWidth + 'px' }">
-    <!-- 顶部标题栏 -->
+    <!-- 标题栏 -->
     <div class="panel-header">
       <span class="panel-title">
         <el-icon>
@@ -8,7 +8,9 @@
         </el-icon>
         Robot Structure
       </span>
-      <el-button size="small" :icon="Plus" @click="handleAddRootLink">Add Link</el-button>
+      <div class="panel-header-actions">
+        <el-button size="small" :icon="Plus" @click="handleAddRootLink">Add Link</el-button>
+      </div>
     </div>
 
     <!-- 树形内容区 -->
@@ -97,7 +99,6 @@ import { useURDFStore } from '../../stores/useURDFStore'
 import type { URDFTreeNode } from '../../stores/useURDFStore'
 import type { JointType } from '../../types'
 import ViewControls from './ViewControls.vue'
-import { lo } from 'element-plus/es/locale'
 
 defineEmits<{
   (e: 'exportUrdf'): void
@@ -105,7 +106,7 @@ defineEmits<{
 
 const urdfStore = useURDFStore()
 const treeRef = ref<any>()
-const panelWidth = ref(350)
+const panelWidth = ref(330)
 
 // ——— 内联重命名状态 ———
 const editingId = ref<string | null>(null)
@@ -261,12 +262,16 @@ function startResize(e: MouseEvent): void {
   const startX = e.clientX
   const startWidth = panelWidth.value
   const onMove = (ev: MouseEvent) => {
-    panelWidth.value = Math.max(260, Math.min(520, startWidth + ev.clientX - startX))
+    panelWidth.value = Math.max(200, Math.min(500, startWidth + ev.clientX - startX))
   }
   const onUp = () => {
     document.removeEventListener('mousemove', onMove)
     document.removeEventListener('mouseup', onUp)
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
   }
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
   document.addEventListener('mousemove', onMove)
   document.addEventListener('mouseup', onUp)
 }
@@ -284,13 +289,15 @@ defineExpose({ setCurrentNodeById })
 
 <style lang="scss" scoped>
 .urdf-left-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   height: 100%;
+  min-width: 200px;
+  max-width: 500px;
   background: #fff;
   border-right: 1px solid #e4e7ed;
-  position: relative;
-  flex-shrink: 0;
+  z-index: 10;
   overflow: hidden;
 }
 
@@ -310,6 +317,12 @@ defineExpose({ setCurrentNodeById })
     font-size: 13px;
     font-weight: 600;
     color: #303133;
+  }
+
+  .panel-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 4px;
   }
 }
 
@@ -460,14 +473,14 @@ defineExpose({ setCurrentNodeById })
 .resize-handle {
   position: absolute;
   top: 0;
-  right: 0;
-  width: 4px;
-  height: 100%;
+  right: -3px;
+  bottom: 0;
+  width: 6px;
   cursor: col-resize;
-  z-index: 10;
+  z-index: 20;
 
   &:hover {
-    background: rgba(64, 158, 255, 0.4);
+    background: rgba(64, 158, 255, 0.3);
   }
 }
 </style>

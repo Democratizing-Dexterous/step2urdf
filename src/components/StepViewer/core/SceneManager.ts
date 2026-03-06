@@ -74,9 +74,6 @@ export class SceneManager {
 
   // 按需渲染：脏标记机制
   private _needsRender = true
-  /** 阻尼稳定计数器（阻尼动画停止后延续几帧确保完全静止） */
-  private dampingSettleFrames = 0
-  private readonly DAMPING_SETTLE_MAX = 10
   /** 是否正在进行相机动画 */
   private isAnimating = false
   /** ViewHelper 动画状态跟踪（用于动画结束时恢复 controls） */
@@ -246,7 +243,6 @@ export class SceneManager {
    */
   markDirty(): void {
     this._needsRender = true
-    this.dampingSettleFrames = this.DAMPING_SETTLE_MAX
   }
 
   /**
@@ -302,8 +298,6 @@ export class SceneManager {
       }
 
       // 更新控制器（仅在非 ViewHelper 动画期间）
-      // ArcballControls 通过 'change' 事件驱动渲染，update() 无返回值可用
-      let controlsUpdated = false
       if (!viewHelperAnimating) {
         this.controls.update()
       }
@@ -311,8 +305,6 @@ export class SceneManager {
       // 判断是否需要渲染
       const shouldRender = this._needsRender
         || this.isAnimating
-        || this.dampingSettleFrames > 0
-        || controlsUpdated
         || viewHelperAnimating
 
       if (shouldRender && this.renderer && this.width > 0 && this.height > 0) {
@@ -347,11 +339,6 @@ export class SceneManager {
 
         // 重置脏标记
         this._needsRender = false
-
-        // 递减阻尼稳定计数
-        if (this.dampingSettleFrames > 0) {
-          this.dampingSettleFrames--
-        }
       }
     }
     animate()

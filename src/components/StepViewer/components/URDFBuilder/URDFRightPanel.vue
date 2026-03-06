@@ -50,13 +50,13 @@ const urdfStore = useURDFStore()
 const contextTitle = computed(() => {
   if (urdfStore.selectedJointId) {
     const j = urdfStore.jointMap.get(urdfStore.selectedJointId)
-    return `⚙️ ${j?.name ?? 'Joint 属性'}`
+    return `${j?.name ?? 'Joint 属性'}`
   }
   if (urdfStore.selectedLinkId) {
     const l = urdfStore.linkMap.get(urdfStore.selectedLinkId)
-    return `📦 ${l?.name ?? 'Link 属性'}`
+    return `${l?.name ?? 'Link 属性'}`
   }
-  return '📋 属性面板'
+  return '属性面板'
 })
 </script>
 
@@ -103,7 +103,7 @@ const contextTitle = computed(() => {
   flex-shrink: 0;
 
   .section-title {
-    font-size: 12px;
+    font-size: 16px;
     font-weight: 600;
     color: #303133;
     overflow: hidden;

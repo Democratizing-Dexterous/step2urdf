@@ -145,62 +145,7 @@ export interface SelectionInfo {
   distance: number
 }
 
-// ============ 测量相关 ============
 
-/** 测量类型 */
-export enum MeasurementType {
-  DISTANCE = 'distance',
-  ANGLE = 'angle',
-  RADIUS = 'radius',
-  DIAMETER = 'diameter',
-  LENGTH = 'length',
-  AREA = 'area'
-}
-
-/** 测量结果 */
-export interface MeasurementResult {
-  id: string
-  type: MeasurementType
-  value: number
-  unit: string
-  feature1: GeometryFeature
-  feature2?: GeometryFeature
-  points: Vector3[]
-  displayPosition: Vector3
-  label: string
-  visible: boolean
-}
-
-/** 测量配置 */
-export interface MeasurementConfig {
-  unit: 'mm' | 'cm' | 'm' | 'inch'
-  precision: number
-  showLabel: boolean
-  lineColor: number
-  labelColor: number
-}
-
-// ============ 辅助可视化相关 ============
-
-/** 辅助线类型 */
-export enum AuxiliaryLineType {
-  NORMAL = 'normal',
-  AXIS = 'axis',
-  CENTER = 'center',
-  TANGENT = 'tangent'
-}
-
-/** 辅助线信息 */
-export interface AuxiliaryLine {
-  id: string
-  type: AuxiliaryLineType
-  feature: GeometryFeature
-  startPoint: Vector3
-  endPoint: Vector3
-  visible: boolean
-  color: number
-  dashed: boolean
-}
 
 // ============ 视图控制相关 ============
 
@@ -363,7 +308,6 @@ export interface ViewerEventHandlers {
   onSelect?: (selections: SelectionInfo[]) => void
   onDeselect?: () => void
   onHover?: (feature?: GeometryFeature) => void
-  onMeasure?: (result: MeasurementResult) => void
   onViewChange?: (camera: CameraConfig) => void
 }
 
@@ -376,7 +320,6 @@ export interface StepViewerProps {
   backgroundColor?: number
   showAxes?: boolean
   showGrid?: boolean
-  measurementConfig?: Partial<MeasurementConfig>
   renderConfig?: Partial<RenderConfig>
 }
 
@@ -391,8 +334,7 @@ export interface ToolbarConfig {
 
 // ============ URDF 构建相关 ============
 
-/** 视图模式 */
-export type ViewMode = 'preview' | 'urdf'
+
 
 /** 关节类型 */
 export type JointType = 'revolute' | 'prismatic' | 'fixed'
@@ -439,19 +381,11 @@ export interface URDFJoint {
   childLinkId: string
   origin: URDFOrigin
   axis: [number, number, number]
+  /** 轴偏移：在 origin.xyz 基础上的额外平移（用于调整轴线交汇点） */
+  axisOffset: [number, number, number]
   limits: JointLimits
   /** 当前关节值（用于 FK 驱动） */
   currentValue: number
-}
-
-/** URDF 运动链（自动计算，只读） */
-export interface URDFChain {
-  id: string
-  name: string
-  /** 从根到末端的有序 Link ID 列表 */
-  linkIds: string[]
-  /** 对应的有序 Joint ID 列表 */
-  jointIds: string[]
 }
 
 /** URDF 机器人模型 */
@@ -483,20 +417,6 @@ export interface InertiaWorkerResponse {
   type: 'result'
   linkId: string
   inertial: InertialParams
-}
-
-/** 导出 Worker 请求 */
-export interface ExportWorkerRequest {
-  type: 'export'
-  robot: URDFRobot
-  solidDataMap: Record<string, SerializedSolidData[]>
-  urdfXml: string
-}
-
-/** 导出 Worker 响应 */
-export interface ExportWorkerResponse {
-  type: 'result'
-  zipBlob: Blob
 }
 
 // ============ 关节智能吸附相关 ============

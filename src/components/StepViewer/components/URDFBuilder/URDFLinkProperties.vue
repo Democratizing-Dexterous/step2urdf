@@ -1,7 +1,7 @@
 <template>
   <div class="link-properties" v-if="link">
     <!-- 连杆名称 -->
-    <div class="link-name-row">
+    <!-- <div class="link-name-row">
       <el-icon class="link-icon">
         <Box />
       </el-icon>
@@ -9,7 +9,7 @@
         @keydown.escape="cancelRename" style="flex: 1" />
       <span v-else class="link-name" @dblclick="startRename">{{ link.name }}</span>
       <el-tag v-if="urdfStore.isBaseLink(link.id)" type="info">root</el-tag>
-    </div>
+    </div> -->
 
     <!-- Base Link 坐标基点（仅 root link 显示）-->
     <div v-if="urdfStore.isBaseLink(link.id)" class="base-origin-section">

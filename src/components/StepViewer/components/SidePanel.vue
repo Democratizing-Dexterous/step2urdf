@@ -1,89 +1,166 @@
 <!--
-  左侧边栏面板
-  仅包含模型结构树
-  支持拖拽调整宽度、折叠/展开
+  模型结构树浮动面板
+  可拖拽移动、关闭
 -->
 
 <template>
-  <div v-show="store.sidePanelVisible" class="side-panel" :style="{ width: `${store.sidePanelWidth}px` }">
-    <ModelTree @select="handleTreeSelect" />
+  <Teleport to="body">
+    <Transition name="model-tree-panel">
+      <div v-show="visible" class="model-tree-panel-overlay" ref="panelRef"
+        :style="{ left: panelPos.x + 'px', top: panelPos.y + 'px', width: panelWidth + 'px' }">
+        <!-- 拖拽标题栏 -->
+        <div class="panel-header" @mousedown="startDrag">
+          <span class="panel-title">模型结构</span>
+          <el-button size="small" text @click="$emit('close')">✕</el-button>
+        </div>
 
-    <!-- 拖拽手柄 -->
-    <div class="resize-handle" @mousedown="startResize" />
-  </div>
+        <ModelTree @select="handleTreeSelect" @solid-hover="handleSolidHover"
+          @toggle-solid-visibility="handleToggleSolidVisibility" />
+
+        <!-- 拖拽调整宽度 -->
+        <div class="resize-handle" @mousedown.prevent="startResize" />
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 
 <script setup lang="ts">
+import { ref, reactive } from 'vue'
 import type { TreeNode } from '../types'
-import { useStepViewerStore } from '../stores/useStepViewerStore'
 import ModelTree from './ModelTree.vue'
 
-const store = useStepViewerStore()
+defineProps<{
+  visible: boolean
+}>()
 
 // 事件
 const emit = defineEmits<{
   (e: 'tree-select', node: TreeNode, multi: boolean): void
+  (e: 'solid-hover', solidId: string | null): void
+  (e: 'toggle-solid-visibility', solidId: string): void
+  (e: 'close'): void
 }>()
 
-/**
- * 树选中事件透传
- */
+// 面板状态
+const panelRef = ref<HTMLElement>()
+const panelWidth = ref(300)
+const panelPos = reactive({ x: 340, y: 80 })
+
 function handleTreeSelect(node: TreeNode, multi: boolean): void {
   emit('tree-select', node, multi)
 }
 
-/**
- * 拖拽调整宽度
- */
-function startResize(e: MouseEvent): void {
+function handleSolidHover(solidId: string | null): void {
+  emit('solid-hover', solidId)
+}
+
+function handleToggleSolidVisibility(solidId: string): void {
+  emit('toggle-solid-visibility', solidId)
+}
+
+// ——— 面板拖拽移动 ———
+function startDrag(e: MouseEvent): void {
+  if ((e.target as HTMLElement).closest('button, .el-button')) return
   e.preventDefault()
-  const startX = e.clientX
-  const startWidth = store.sidePanelWidth
-
-  const onMouseMove = (moveEvent: MouseEvent) => {
-    const delta = moveEvent.clientX - startX
-    store.setSidePanelWidth(startWidth + delta)
+  const startX = e.clientX - panelPos.x
+  const startY = e.clientY - panelPos.y
+  const onMove = (ev: MouseEvent) => {
+    panelPos.x = Math.max(0, ev.clientX - startX)
+    panelPos.y = Math.max(0, ev.clientY - startY)
   }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
+    document.body.style.userSelect = ''
+  }
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
+}
 
-  const onMouseUp = () => {
-    document.removeEventListener('mousemove', onMouseMove)
-    document.removeEventListener('mouseup', onMouseUp)
+// ——— 面板宽度拖拽 ———
+function startResize(e: MouseEvent): void {
+  const startX = e.clientX
+  const startWidth = panelWidth.value
+  const onMove = (ev: MouseEvent) => {
+    panelWidth.value = Math.max(220, Math.min(500, startWidth + ev.clientX - startX))
+  }
+  const onUp = () => {
+    document.removeEventListener('mousemove', onMove)
+    document.removeEventListener('mouseup', onUp)
     document.body.style.cursor = ''
     document.body.style.userSelect = ''
   }
-
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
-  document.addEventListener('mousemove', onMouseMove)
-  document.addEventListener('mouseup', onMouseUp)
+  document.addEventListener('mousemove', onMove)
+  document.addEventListener('mouseup', onUp)
 }
 </script>
 
 <style scoped lang="scss">
-.side-panel {
-  position: relative;
+.model-tree-panel-overlay {
+  position: fixed;
   display: flex;
   flex-direction: column;
-  height: 100%;
-  min-width: 200px;
-  max-width: 500px;
-  background: var(--el-bg-color, #fff);
-  border-right: 1px solid var(--el-border-color-lighter, #e4e7ed);
-  z-index: 10;
+  height: 70vh;
+  max-height: 80vh;
+  background: #fff;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
   overflow: hidden;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e4e7ed;
+  background: #fafafa;
+  flex-shrink: 0;
+  cursor: move;
+  user-select: none;
+
+  .panel-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #303133;
+  }
 }
 
 .resize-handle {
   position: absolute;
   top: 0;
-  right: -3px;
-  bottom: 0;
-  width: 6px;
+  right: 0;
+  width: 4px;
+  height: 100%;
   cursor: col-resize;
-  z-index: 20;
+  z-index: 10;
 
   &:hover {
-    background: var(--el-color-primary-light-7, rgba(64, 158, 255, 0.3));
+    background: rgba(64, 158, 255, 0.4);
   }
+}
+
+/* 入场/退场过渡 */
+.model-tree-panel-enter-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.model-tree-panel-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.model-tree-panel-enter-from {
+  opacity: 0;
+  transform: translateY(-12px) scale(0.96);
+}
+
+.model-tree-panel-leave-to {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
 }
 </style>

@@ -3,23 +3,26 @@
 
     <!-- 工具栏 -->
     <Toolbar :file-name="store.currentFileName" :is-loading="store.isLoading" :has-model="store.hasModel"
-      :has-selection="store.selectedFeatures.length > 0" :show-axes="store.showAxes" :show-grid="store.showGrid"
-      :show-stats="showStats" :occt-ready="occtReady" :occt-load-progress="occtLoadProgress"
-      :is-line-measure-active="store.isLineMeasureActive" :opacity="opacityPercent"
-      :granularity-mode="store.granularityMode" :view-mode="urdfStore.viewMode" @upload="handleFileUpload"
+      :has-selection="hasAnySelection" :show-axes="store.showAxes" :show-grid="store.showGrid" :show-stats="showStats"
+      :occt-ready="occtReady" :occt-load-progress="occtLoadProgress" :is-line-measure-active="store.isLineMeasureActive"
+      :opacity="opacityPercent" :is-model-tree-open="modelTreeVisible" @upload="handleFileUpload"
       @fit-view="handleFitView" @toggle-axes="handleToggleAxes" @toggle-grid="handleToggleGrid"
-      @opacity-change="handleOpacityChange" @granularity-change="handleGranularityChange"
-      @clear-selection="handleClearSelection" @reset-view="handleResetView" @toggle-stats="handleToggleStats"
-      @toggle-line-measure="handleToggleLineMeasure" @switch-view-mode="handleSwitchViewMode" />
+      @opacity-change="handleOpacityChange" @clear-selection="handleClearSelection" @reset-view="handleResetView"
+      @toggle-stats="handleToggleStats" @toggle-line-measure="handleToggleLineMeasure"
+      @toggle-model-tree="modelTreeVisible = !modelTreeVisible" />
 
     <!-- 主内容区域 -->
     <div class="viewer-content">
-      <!-- Preview 模式：模型结构树 -->
-      <SidePanel v-if="urdfStore.viewMode === 'preview'" @tree-select="handleTreeSelect" />
+      <!-- 左侧 URDF 结构树（固定面板） -->
+      <URDFLeftPanel v-if="store.hasModel" ref="urdfLeftPanelRef" @export-urdf="handleExportURDF" />
 
-      <!-- URDF 模式：左侧面板 -->
-      <URDFLeftPanel v-if="urdfStore.viewMode === 'urdf' && store.hasModel" ref="urdfLeftPanelRef"
-        @export-urdf="handleExportURDF" />
+      <!-- 模型结构树（浮动面板） -->
+      <SidePanel :visible="modelTreeVisible" @tree-select="handleTreeSelect" @solid-hover="handleSolidHover"
+        @toggle-solid-visibility="handleToggleSolidVisibility" @close="modelTreeVisible = false" />
+
+      <!-- 测量面板（浮动面板） -->
+      <MeasurementPanel :visible="measurePanelVisible" @remove="handleRemoveMeasurement"
+        @clear-all="handleClearMeasurements" @close="measurePanelVisible = false" />
 
       <!-- 3D 画布 -->
       <div class="canvas-container" ref="canvasContainerRef">
@@ -50,49 +53,38 @@
 
       </div>
 
-      <!-- Preview 模式：右侧信息面板 -->
-      <RightPanel v-if="urdfStore.viewMode === 'preview'" :visible="store.hasModel"
-        @remove-feature="handleRemoveFeature" @remove-measurement="handleRemoveMeasurement"
-        @measure-radius="handleMeasureRadius" @measure-diameter="handleMeasureDiameter"
-        @measure-distance="handleMeasureDistance" @measure-angle="handleMeasureAngle"
-        @clear-measurements="handleClearMeasurements" @remove-line-measurement="handleRemoveLineMeasurement"
-        @clear-line-measurements="handleClearLineMeasurements" />
-
-      <!-- URDF 模式：右侧属性面板 -->
-      <URDFRightPanel v-if="urdfStore.viewMode === 'urdf' && store.hasModel" @flip-normal="handleFlipNormal"
-        @toggle-f-k-panel="fkPanelVisible = !fkPanelVisible" />
+      <!-- 右侧属性面板 -->
+      <URDFRightPanel v-if="store.hasModel" @flip-normal="urdfScene.flipNormal"
+        @toggle-f-k-panel="handleToggleFKPanel" />
 
     </div>
 
     <!-- 浮动关节控制面板 -->
-    <FloatingJointControl v-if="urdfStore.viewMode === 'urdf'" :visible="fkPanelVisible"
-      @close="fkPanelVisible = false" />
+    <FloatingJointControl :visible="fkPanelVisible" @close="fkPanelVisible = false" />
 
     <!-- Joint 创建向导 -->
-    <JointWizard v-if="urdfStore.viewMode === 'urdf'" ref="jointWizardRef" @created="handleJointCreated"
-      @start-edge-pick="startEdgePickMode" @stop-edge-pick="stopEdgePickMode" @flip-normal="handleFlipNormal" />
-
-
+    <JointWizard ref="jointWizardRef" @created="urdfScene.handleJointCreated"
+      @start-edge-pick="urdfScene.startEdgePickMode" @stop-edge-pick="urdfScene.stopEdgePickMode"
+      @flip-normal="urdfScene.flipNormal" />
 
 
 
     <!-- 状态栏 -->
     <div class="status-bar">
-      <span v-if="store.hasModel && urdfStore.viewMode === 'preview'">
-        实体: {{ store.solids.length }} |
-        特征: {{ totalFeatures }} |
-        选中: {{ store.selectedFeatures.length }}
+      <template v-if="store.hasModel">
+        <span class="status-item">实体: <b>{{ store.solids.length }}</b></span>
+        <span class="status-sep">|</span>
+        <span class="status-item">URDF: <b>{{ urdfStore.robot.name }}</b></span>
+        <span class="status-sep">|</span>
+        <span class="status-item">Links: <b>{{ urdfStore.robot.links.length }}</b></span>
+        <span class="status-sep">|</span>
+        <span class="status-item">Joints: <b>{{ urdfStore.robot.joints.length }}</b></span>
         <template v-if="store.selectedSolidNames.length">
-          | {{ store.selectedSolidNames.join(', ') }}
+          <span class="status-sep">|</span>
+          <span class="status-item status-selected">{{ store.selectedSolidNames.join(', ') }}</span>
         </template>
-      </span>
-      <span v-else-if="store.hasModel && urdfStore.viewMode === 'urdf'">
-        URDF: {{ urdfStore.robot.name }} |
-        Links: {{ urdfStore.robot.links.length }} |
-        Joints: {{ urdfStore.robot.joints.length }} |
-        Chains: {{ urdfStore.chains.length }}
-      </span>
-      <span v-else>{{ occtReady ? '就绪 — 支持 .step / .stp 文件' : '正在加载 OpenCASCADE...' }}</span>
+      </template>
+      <span v-else class="status-item">{{ occtReady ? '就绪 — 支持 .step / .stp 文件' : '正在加载 OpenCASCADE...' }}</span>
     </div>
   </div>
 </template>
@@ -103,10 +95,9 @@ import * as THREE from 'three'
 import { ElMessage } from 'element-plus'
 import Toolbar from './Toolbar.vue'
 import SidePanel from './SidePanel.vue'
-import RightPanel from './RightPanel.vue'
+import MeasurementPanel from './MeasurementPanel.vue'
 import StatsPanel from './StatsPanel.vue'
 import LoadingOverlay from './LoadingOverlay.vue'
-
 import URDFLeftPanel from './URDFBuilder/URDFLeftPanel.vue'
 import URDFRightPanel from './URDFBuilder/URDFRightPanel.vue'
 import FloatingJointControl from './URDFBuilder/FloatingJointControl.vue'
@@ -117,18 +108,13 @@ import {
   StepLoader,
   SceneManager,
   SelectionManager,
-  AuxiliaryVisualizer,
-  MeasurementTool,
   preloadOcct,
   isOcctLoaded
 } from '../core'
 import { LineMeasurementTool } from '../core/LineMeasurementTool'
-import { FrameVisualizer } from '../core/FrameVisualizer'
-import { ForwardKinematics } from '../core/ForwardKinematics'
-import { JointSnapVisualizer } from '../core/JointSnapVisualizer'
-import { computeRelativeTransform, disposeKinematicsWorker } from '../core/useKinematicsWorker'
-import { serializeURDF } from '../core/URDFSerializer'
-import type { GeometryFeature, GranularityMode, TreeNode, ViewMode, SnapData } from '../types'
+import { disposeKinematicsWorker } from '../core/useKinematicsWorker'
+import { useURDFScene } from './composables/useURDFScene'
+import type { GeometryFeature, TreeNode } from '../types'
 import { FeatureType, ViewPreset } from '../types'
 
 // Props
@@ -168,40 +154,75 @@ const occtLoadProgress = ref(isOcctLoaded() ? 100 : 0)
 
 // 浮动关节控制面板
 const fkPanelVisible = ref(false)
+function handleToggleFKPanel(): void {
+  fkPanelVisible.value = !fkPanelVisible.value
+}
 
+// 模型结构树面板可见性
+const modelTreeVisible = ref(false)
+// 测量面板可见性
+const measurePanelVisible = ref(false)
 
+// 广告模态框状态
+const noModelAdVisible = ref(true)
 const exportCompleteAdVisible = ref(false)
-
 
 
 // 核心模块实例
 let stepLoader: StepLoader | null = null
 let sceneManager: SceneManager | null = null
 let selectionManager: SelectionManager | null = null
-let auxiliaryVisualizer: AuxiliaryVisualizer | null = null
-let measurementTool: MeasurementTool | null = null
 let lineMeasurementTool: LineMeasurementTool | null = null
 
-// URDF 核心模块
-let frameVisualizer: FrameVisualizer | null = null
-let forwardKinematics: ForwardKinematics | null = null
-let snapVisualizer: JointSnapVisualizer | null = null
-/** 初始化时按模型尺寸计算的基准轴长，用于与 axisHelperScale 相乘 */
-let baseAxisLength = 0.05
-const jointWizardRef = ref<InstanceType<typeof JointWizard>>()
-const urdfLeftPanelRef = ref<{ setCurrentNodeById: (id: string) => void } | null>(null)
-let edgePickMode = false
-/** 防止 watcher 触发 3D highlight 时反向触发 onSelect 联动，导致循环选中 */
-let isHighlightingFromWatcher = false
-/** 当前吸附数据（供点击确认时使用） */
-let currentSnapData: SnapData | null = null
-
-// 计算属性
-const totalFeatures = computed(() => {
-  return store.solids.reduce((sum, solid) => sum + solid.features.length, 0)
+// URDF 场景 composable
+const urdfScene = useURDFScene({
+  getSceneManager: () => sceneManager,
+  getSelectionManager: () => selectionManager,
 })
 
+const jointWizardRef = ref<InstanceType<typeof JointWizard>>()
+const urdfLeftPanelRef = ref<{ setCurrentNodeById: (id: string) => void } | null>(null)
+/** 防止 watcher 触发 3D highlight 时反向触发 onSelect 联动，导致循环选中 */
+let isHighlightingFromWatcher = false
 
+/** 是否有任何选中（3D 特征 / URDF 树选中 Link 或 Joint） */
+const hasAnySelection = computed(() =>
+  store.selectedFeatures.length > 0
+  || !!urdfStore.selectedLinkId
+  || !!urdfStore.selectedJointId
+)
+
+/**
+ * 统一计算当前应高亮的 Solid ID 列表
+ * 响应：bindingMode / selectedLinkId / selectedJointId / link.solidIds 变化
+ */
+const effectiveHighlightSolidIds = computed<string[]>(() => {
+  // 绑定模式：高亮目标 Link 的所有 Solid
+  if (urdfStore.bindingMode.active && urdfStore.bindingMode.targetLinkId) {
+    const link = urdfStore.linkMap.get(urdfStore.bindingMode.targetLinkId)
+    return link?.solidIds.slice() ?? []
+  }
+  // 选中 Link：高亮该 Link 绑定的所有 Solid
+  if (urdfStore.selectedLinkId) {
+    const link = urdfStore.linkMap.get(urdfStore.selectedLinkId)
+    return link?.solidIds.slice() ?? []
+  }
+  // 选中 Joint：高亮 parent + child Link 的所有 Solid
+  if (urdfStore.selectedJointId) {
+    const joint = urdfStore.jointMap.get(urdfStore.selectedJointId)
+    if (joint) {
+      const parentLink = urdfStore.linkMap.get(joint.parentLinkId)
+      const childLink = urdfStore.linkMap.get(joint.childLinkId)
+      return [
+        ...(parentLink?.solidIds ?? []),
+        ...(childLink?.solidIds ?? [])
+      ]
+    }
+  }
+  return []
+})
+
+// 计算属性
 
 const opacityPercent = computed(() => {
   return Math.round(store.globalOpacity * 100)
@@ -279,13 +300,13 @@ async function initViewer(): Promise<void> {
     const features = event.selections.map(s => s.feature)
 
     // URDF 绑定模式：拦截选择，直接绑定 Solid
-    if (urdfStore.viewMode === 'urdf' && urdfStore.bindingMode.active && features.length > 0) {
-      handleBindingClick(features[0])
+    if (urdfStore.bindingMode.active && features.length > 0) {
+      urdfScene.handleBindingClick(features[0])
       return
     }
 
     // URDF 边拾取模式：拦截选择，传给 JointWizard 或已有 Joint
-    if (urdfStore.viewMode === 'urdf' && edgePickMode && features.length > 0) {
+    if (urdfScene.isEdgePickMode() && features.length > 0) {
       const f = features[0]
       const isAccepted = f.edgeCurveType === 'circle' || f.edgeCurveType === 'arc'
         || f.edgeCurveType === 'line' || f.type === FeatureType.CYLINDER
@@ -301,7 +322,7 @@ async function initViewer(): Promise<void> {
 
       // 编辑模式：更新已有 Joint 的 origin/axis
       if (urdfStore.edgePickEditJointId) {
-        applyPickedEdgeToExistingJoint(urdfStore.edgePickEditJointId, f)
+        urdfScene.applyPickedEdgeToExistingJoint(urdfStore.edgePickEditJointId, f)
       } else {
         // 创建模式：传给 JointWizard
         jointWizardRef.value?.applyPickedEdge(f)
@@ -310,7 +331,7 @@ async function initViewer(): Promise<void> {
     }
 
     // URDF Base Pick 模式：拾取 Solid 面设置 Base Origin
-    if (urdfStore.viewMode === 'urdf' && urdfStore.basePickMode && features.length > 0) {
+    if (urdfStore.basePickMode && features.length > 0) {
       const f = features[0]
       let px = 0, py = 0, pz = 0
       if (f.center) {
@@ -327,16 +348,16 @@ async function initViewer(): Promise<void> {
       const round = (v: number) => Math.round(v * 10000) / 10000
       urdfStore.baseLinkOrigin = [round(px), round(py), round(pz)]
       urdfStore.basePickMode = false
-      updateFKAndFrames()
+      urdfScene.updateFKAndFrames()
       ElMessage.success('Base Origin 已设置')
       return
     }
 
     store.setSelectedFeatures(features)
 
-    // URDF 模式：3D 点击 Solid → 反向联动左侧树选中对应 Link
+    // 3D 点击 Solid → 反向联动左侧树选中对应 Link
     // isHighlightingFromWatcher 为 true 或绑定模式激活时不进行反向联动（避免切换右侧面板）
-    if (!isHighlightingFromWatcher && urdfStore.viewMode === 'urdf'
+    if (!isHighlightingFromWatcher
       && !urdfStore.bindingMode.active
       && features.length > 0 && features[0].solidId) {
       const solidId = features[0].solidId
@@ -363,71 +384,17 @@ async function initViewer(): Promise<void> {
       store.syncTreeFromSelection(event.selectedTreeNodeIds)
     }
 
-    updateAuxiliaryLines()
+    urdfScene.updateFKAndFrames() // refresh after tree sync
     sceneManager?.markDirty()
   })
 
   // Hover 回调 → 驱动 Snap Gizmo 可视化
   selectionManager.onHover((feature) => {
-    if (!edgePickMode || !snapVisualizer) {
-      snapVisualizer?.hide()
-      currentSnapData = null
-      return
-    }
-
-    if (!feature) {
-      snapVisualizer.hide()
-      currentSnapData = null
-      sceneManager?.markDirty()
-      return
-    }
-
-    // 仅处理圆弧边和直线边
-    if (feature.edgeCurveType === 'circle' || feature.edgeCurveType === 'arc') {
-      if (feature.center && (feature.axis || feature.normal)) {
-        const pos = feature.center
-        const norm = (feature.axis || feature.normal)!
-        snapVisualizer.updateSnap(pos, norm)
-        currentSnapData = {
-          position: [pos.x, pos.y, pos.z],
-          normal: [norm.x, norm.y, norm.z],
-          featureType: feature.edgeCurveType as 'circle' | 'arc'
-        }
-        sceneManager?.markDirty()
-      }
-    } else if (feature.edgeCurveType === 'line') {
-      if (feature.startPoint && feature.endPoint) {
-        const pos = feature.startPoint
-        const dir = feature.endPoint.clone().sub(feature.startPoint).normalize()
-        snapVisualizer.updateSnap(pos, dir)
-        currentSnapData = {
-          position: [pos.x, pos.y, pos.z],
-          normal: [dir.x, dir.y, dir.z],
-          featureType: 'line'
-        }
-        sceneManager?.markDirty()
-      }
-    } else {
-      snapVisualizer.hide()
-      currentSnapData = null
-    }
-  })
-
-  // 辅助可视化
-  auxiliaryVisualizer = new AuxiliaryVisualizer({
-    scene: sceneManager.scene
-  })
-
-  // 测量工具
-  measurementTool = new MeasurementTool({
-    scene: sceneManager.scene,
-    camera: sceneManager.camera,
-    container: canvasContainerRef.value
+    urdfScene.handleHoverSnap(feature)
   })
 
   // 渲染回调
   sceneManager.addRenderCallback(() => {
-    measurementTool?.render()
     if (sceneManager) {
       frameDrawCalls.value = sceneManager.frameDrawCalls
     }
@@ -444,7 +411,6 @@ async function initViewer(): Promise<void> {
     domElement: sceneManager.getDomElement(),
     container: canvasContainerRef.value,
     controls: sceneManager.controls,
-    labelRenderer: measurementTool!.getLabelRenderer(),
     onRenderRequest: () => sceneManager?.requestRender(),
     onLineAdded: (line) => {
       store.addLineMeasurement(line)
@@ -458,23 +424,12 @@ async function initViewer(): Promise<void> {
 
   // 尺寸监听
   const resizeObserver = new ResizeObserver(() => {
-    if (canvasContainerRef.value && sceneManager && measurementTool) {
+    if (canvasContainerRef.value && sceneManager) {
       const { clientWidth, clientHeight } = canvasContainerRef.value
       sceneManager.updateSize(clientWidth, clientHeight)
-      measurementTool.updateSize(clientWidth, clientHeight)
     }
   })
   resizeObserver.observe(canvasContainerRef.value)
-}
-
-// ========== 辅助方法 ==========
-
-function updateAuxiliaryLines(): void {
-  if (!auxiliaryVisualizer) return
-  auxiliaryVisualizer.clearAll()
-  store.featuresWithNormalLine.forEach(feature => {
-    auxiliaryVisualizer?.showNormalLine(feature)
-  })
 }
 
 // ========== 键盘视角快捷键 ==========
@@ -514,23 +469,15 @@ function disposeViewer(): void {
   }
 
   // 清理 URDF 模块
-  frameVisualizer?.dispose()
-  frameVisualizer = null
-  snapVisualizer?.dispose()
-  snapVisualizer = null
+  urdfScene.disposeModules()
   disposeKinematicsWorker()
-  forwardKinematics = null
 
-  measurementTool?.dispose()
-  auxiliaryVisualizer?.dispose()
   selectionManager?.dispose()
   sceneManager?.dispose()
 
   stepLoader = null
   sceneManager = null
   selectionManager = null
-  auxiliaryVisualizer = null
-  measurementTool = null
 }
 
 // ========== ViewHelper ==========
@@ -610,7 +557,6 @@ async function handleFileUpload(file: File): Promise<void> {
       const { clientWidth, clientHeight } = canvasContainerRef.value
       if (clientWidth > 0 && clientHeight > 0) {
         sceneManager.updateSize(clientWidth, clientHeight)
-        measurementTool?.updateSize(clientWidth, clientHeight)
       }
       sceneManager.fitToModel()
     }
@@ -621,8 +567,8 @@ async function handleFileUpload(file: File): Promise<void> {
       message: '加载完成'
     })
 
-    // ★ 导入完成后自动切换到 URDF 视图
-    handleSwitchViewMode('urdf')
+    // ★ 导入完成后自动初始化 URDF 模块
+    initURDFModules()
 
     ElMessage.success('模型加载成功')
   } catch (error) {
@@ -688,62 +634,26 @@ function handleOpacityChange(percent: number): void {
   sceneManager?.markDirty()
 }
 
-function handleGranularityChange(mode: GranularityMode): void {
-  if (mode === store.granularityMode) return
-  store.setGranularityMode(mode)
-  selectionManager?.setGranularityMode(mode)
-  // 清除辅助可视化
-  auxiliaryVisualizer?.clearAll()
-  sceneManager?.markDirty()
-}
-
 function handleToggleStats(): void {
   showStats.value = !showStats.value
 }
 
-function handleToggleSidePanel(): void {
-  store.toggleSidePanel()
-}
-
-function handleClearMeasurements(): void {
-  measurementTool?.clearAllMeasurements()
-  store.clearMeasurements()
-  sceneManager?.markDirty()
-}
-
-function handleRemoveLineMeasurement(id: string): void {
-  lineMeasurementTool?.removeLine(id)
-  store.removeLineMeasurement(id)
-  sceneManager?.markDirty()
-}
-
-function handleClearLineMeasurements(): void {
-  lineMeasurementTool?.clearAll()
-  store.clearLineMeasurements()
-  sceneManager?.markDirty()
-}
-
 function handleClearSelection(): void {
   // 绑定模式 / 边拾取模式下禁止清除选择（保护当前工作现场）
-  if (urdfStore.viewMode === 'urdf') {
-    if (urdfStore.bindingMode.active) {
-      ElMessage.warning('请先点击「 完成绑定」按钮，完成当前 Solid 绑定后再操作')
-      return
-    }
-    if (urdfStore.edgePickEditJointId) {
-      ElMessage.warning('请先点击「✕ 停止拾取」结束关节轴线拾取后再操作')
-      return
-    }
+  if (urdfStore.bindingMode.active) {
+    ElMessage.warning('请先点击「 完成绑定」按钮，完成当前 Solid 绑定后再操作')
+    return
+  }
+  if (urdfStore.edgePickEditJointId) {
+    ElMessage.warning('请先点击「✕ 停止拾取」结束关节轴线拾取后再操作')
+    return
   }
   selectionManager?.clearSelection()
   store.clearSelection()
-  auxiliaryVisualizer?.clearAll()
-  // URDF 模式下，同步清除树选中状态
-  if (urdfStore.viewMode === 'urdf') {
-    urdfStore.selectedLinkId = null
-    urdfStore.selectedJointId = null
-    nextTick(() => urdfLeftPanelRef.value?.setCurrentNodeById(''))
-  }
+  // 同步清除树选中状态
+  urdfStore.selectedLinkId = null
+  urdfStore.selectedJointId = null
+  nextTick(() => urdfLeftPanelRef.value?.setCurrentNodeById(''))
 }
 
 function handleResetView(): void {
@@ -758,80 +668,30 @@ function handleToggleLineMeasure(): void {
   store.setLineMeasureActive(active)
   if (active) {
     lineMeasurementTool.activate()
+    measurePanelVisible.value = true
     // 画线模式下禁用选择管理器
     selectionManager?.setEnabled(false)
   } else {
     lineMeasurementTool.deactivate()
+    measurePanelVisible.value = false
     selectionManager?.setEnabled(true)
   }
   sceneManager?.markDirty()
 }
 
-// ========== InfoPanel 事件（通过 SidePanel 透传） ==========
-
-function handleRemoveFeature(featureId: string): void {
-  // deselectFeature 内部会触发 onSelectCallback 更新 store（selectedFeatures + selectedTreeNodeIds）
-  selectionManager?.deselectFeature(featureId)
-  auxiliaryVisualizer?.clearFeatureAuxiliary(featureId)
-  sceneManager?.markDirty()
-}
-
 function handleRemoveMeasurement(id: string): void {
-  measurementTool?.removeMeasurement(id)
-  store.removeMeasurement(id)
+  lineMeasurementTool?.removeLine(id)
   sceneManager?.markDirty()
 }
 
-function handleMeasureRadius(): void {
-  if (!measurementTool || store.selectedFeatures.length !== 1) return
-  const result = measurementTool.measureRadius(store.selectedFeatures[0])
-  if (result) {
-    store.addMeasurement(result)
-    sceneManager?.markDirty()
-  } else {
-    ElMessage.warning('无法测量该特征的半径')
-  }
-}
-
-function handleMeasureDiameter(): void {
-  if (!measurementTool || store.selectedFeatures.length !== 1) return
-  const result = measurementTool.measureDiameter(store.selectedFeatures[0])
-  if (result) {
-    store.addMeasurement(result)
-    sceneManager?.markDirty()
-  } else {
-    ElMessage.warning('无法测量该特征的直径')
-  }
-}
-
-function handleMeasureDistance(): void {
-  if (!measurementTool || store.selectedFeatures.length !== 2) return
-  const result = measurementTool.measureFeatures(
-    store.selectedFeatures[0],
-    store.selectedFeatures[1]
-  )
-  if (result) {
-    store.addMeasurement(result)
-    sceneManager?.markDirty()
-  } else {
-    ElMessage.warning('无法测量这两个特征之间的距离')
-  }
-}
-
-function handleMeasureAngle(): void {
-  if (!measurementTool || store.selectedFeatures.length !== 2) return
-  const result = measurementTool.measureAngle(store.selectedFeatures[0], store.selectedFeatures[1])
-  if (result) {
-    store.addMeasurement(result)
-    sceneManager?.markDirty()
-  } else {
-    ElMessage.warning('无法测量这两个特征之间的角度')
-  }
+function handleClearMeasurements(): void {
+  lineMeasurementTool?.clearAll()
+  store.clearLineMeasurements()
+  sceneManager?.markDirty()
 }
 
 function handleClearAll(): void {
   handleClearSelection()
-  handleClearMeasurements()
   // 清理画线测量
   if (lineMeasurementTool) {
     lineMeasurementTool.clearAll()
@@ -843,15 +703,9 @@ function handleClearAll(): void {
     selectionManager?.setEnabled(true)
   }
 
-  // ★ 清理 URDF 状态（修复重载模型 bug）
+  // 清理 URDF 状态（修复重载模型 bug）
   urdfStore.clearAll()
-  frameVisualizer?.dispose()
-  frameVisualizer = null
-  forwardKinematics = null
-  snapVisualizer?.dispose()
-  snapVisualizer = null
-  currentSnapData = null
-  edgePickMode = false
+  urdfScene.disposeModules()
 
   sceneManager?.clearModels()
   store.clearModel()
@@ -860,399 +714,30 @@ function handleClearAll(): void {
   frameDrawCalls.value = 0
 }
 
-// ========== URDF 双视图切换 ==========
-
-function handleSwitchViewMode(mode: ViewMode): void {
-  urdfStore.viewMode = mode
-  if (mode === 'urdf') {
-    // 切换到 URDF 模式时初始化 URDF 模块
-    initURDFModules()
-  } else {
-    // 切换回 Preview 模式时清理 URDF 辅助可视化
-    frameVisualizer?.setVisible(false)
-    snapVisualizer?.hide()
-    currentSnapData = null
-    resetFKTransforms()
-  }
-  sceneManager?.markDirty()
-}
-
 function initURDFModules(): void {
-  if (!sceneManager) return
-
-  // 根据模型包围盒自动计算可视化轴长度
-  const box = new THREE.Box3().setFromObject(sceneManager.modelGroup)
-  const size = box.getSize(new THREE.Vector3())
-  const maxDim = Math.max(size.x, size.y, size.z)
-  baseAxisLength = maxDim > 0 ? maxDim * 0.05 : 0.05
-  const axisLength = baseAxisLength * urdfStore.axisHelperScale
-
-  // (Re)create visualizers with model-scale axis length
-  frameVisualizer?.dispose()
-  frameVisualizer = new FrameVisualizer({ scene: sceneManager.scene, axisLength })
-
-  if (!forwardKinematics) {
-    forwardKinematics = new ForwardKinematics()
-  }
-
-  snapVisualizer?.dispose()
-  snapVisualizer = new JointSnapVisualizer({ scene: sceneManager.scene, axisLength })
-
-  // 同步当前状态
-  forwardKinematics.setRobot(urdfStore.robot)
-  frameVisualizer.setVisible(urdfStore.showFrames)
-  updateFKAndFrames()
-}
-
-function updateFKAndFrames(): void {
-  if (!forwardKinematics || !sceneManager) return
-
-  forwardKinematics.setRobot(urdfStore.robot)
-  const transforms = forwardKinematics.compute()
-
-  // 将 FK 结果写入 store，供 JointWizard 等组件读取
-  urdfStore.linkWorldTransforms = transforms
-
-  // 应用 FK 变换到 3D 场景
-  forwardKinematics.applyToScene(transforms, urdfStore.robot.links, store.solidMap)
-
-  // 更新关节坐标系可视化
-  if (frameVisualizer && urdfStore.showFrames) {
-    frameVisualizer.showAllFrames(urdfStore.robot.joints)
-    for (const joint of urdfStore.robot.joints) {
-      const wm = forwardKinematics.getJointWorldMatrix(joint.id)
-      if (wm) {
-        frameVisualizer.updateFrameTransform(joint.id, wm)
-      }
-    }
-    // Base Link 坐标系（常显，标识机器人原点）
-    frameVisualizer.showBaseFrame(urdfStore.baseLinkOrigin, urdfStore.baseLinkRPY ?? undefined)
-  }
-
-  sceneManager.markDirty()
-}
-
-function resetFKTransforms(): void {
-  if (!forwardKinematics) return
-  forwardKinematics.resetScene(urdfStore.robot.links, store.solidMap)
-  sceneManager?.markDirty()
-}
-
-// ========== URDF Binding Mode 点击 ==========
-
-function handleBindingClick(feature: GeometryFeature): void {
-  if (!urdfStore.bindingMode.active || !urdfStore.bindingMode.targetLinkId) return
-  if (!feature.solidId) return
-
-  // 检查该 Solid 是否已被其他 Link 绑定
-  if (urdfStore.boundSolidIds.has(feature.solidId)) {
-    ElMessage.warning('该 Solid 已被其他 Link 绑定')
-    return
-  }
-
-  urdfStore.bindSolid(urdfStore.bindingMode.targetLinkId, feature.solidId)
-
-  // 绑定后重新高亮所有已绑 Solid（包括刚绑定的）
-  if (selectionManager) {
-    isHighlightingFromWatcher = true
-    try {
-      selectionManager.clearSelection()
-      const link = urdfStore.linkMap.get(urdfStore.bindingMode.targetLinkId)
-      link?.solidIds.forEach(sid => selectionManager!.selectBySolidId(sid, true))
-    } finally {
-      isHighlightingFromWatcher = false
-    }
-    sceneManager?.markDirty()
-  }
-  const link = urdfStore.linkMap.get(urdfStore.bindingMode.targetLinkId)
-  // ElMessage.success(`Solid 已绑定到 ${link?.name}（继续点击绑定更多，或点完成退出）`)
-}
-
-// ========== JointWizard 相关 ==========
-
-function handleJointCreated(jointId: string): void {
-  // 确保坐标系可见
-  urdfStore.showFrames = true
-  // 隐藏吸附 Gizmo
-  snapVisualizer?.hide()
-  currentSnapData = null
-  updateFKAndFrames()
-}
-
-/** 反转吸附 Gizmo 的 Z 轴方向 */
-function handleFlipNormal(): void {
-  if (!snapVisualizer?.isVisible()) return
-  snapVisualizer.flipNormal()
-  // 同步更新 currentSnapData
-  if (currentSnapData) {
-    const n = snapVisualizer.getCurrentNormal()
-    currentSnapData.normal = [n.x, n.y, n.z]
-  }
-  sceneManager?.markDirty()
-}
-
-function startEdgePickMode(): void {
-  edgePickMode = true
-  // 切换到边选取模式
-  if (selectionManager) {
-    selectionManager.setGranularityMode('edge')
-  }
-}
-
-function stopEdgePickMode(): void {
-  edgePickMode = false
-  urdfStore.edgePickEditJointId = null
-  // 隐藏吸附 Gizmo
-  snapVisualizer?.hide()
-  currentSnapData = null
-  // 恢复之前的选取模式
-  if (selectionManager) {
-    selectionManager.setGranularityMode(store.granularityMode)
-  }
-  sceneManager?.markDirty()
-}
-
-/** 将拾取到的边特征应用到已有 Joint 的 origin/axis（通过 Worker 计算相对坐标） */
-async function applyPickedEdgeToExistingJoint(jointId: string, feature: GeometryFeature): Promise<void> {
-  const joint = urdfStore.jointMap.get(jointId)
-  if (!joint) return
-
-  // 提取 snap 数据
-  let snapPos: [number, number, number]
-  let snapNorm: [number, number, number]
-
-  if (feature.edgeCurveType === 'line') {
-    if (!feature.startPoint || !feature.endPoint) return
-    const dir = feature.endPoint.clone().sub(feature.startPoint).normalize()
-    snapPos = [feature.startPoint.x, feature.startPoint.y, feature.startPoint.z]
-    snapNorm = [dir.x, dir.y, dir.z]
-  } else {
-    if (!feature.center || (!feature.axis && !feature.normal)) return
-    const norm = (feature.axis || feature.normal)!
-    snapPos = [feature.center.x, feature.center.y, feature.center.z]
-    snapNorm = [norm.x, norm.y, norm.z]
-  }
-
-  // 获取父级世界矩阵
-  const parentWorld = urdfStore.linkWorldTransforms.get(joint.parentLinkId)
-  const parentElements = parentWorld ? parentWorld.elements : new THREE.Matrix4().elements
-
-  // Worker 计算相对坐标
-  const result = await computeRelativeTransform(parentElements, snapPos, snapNorm)
-
-  joint.origin.xyz = result.xyz
-  joint.origin.rpy = result.rpy
-  // RPY 已将关节局部 Z 轴对齐到 snapNormal，因此 axis 为局部 Z
-  joint.axis = [0, 0, 1]
-
-  ElMessage.success('已更新关节参数')
+  urdfScene.initModules()
 }
 
 // ========== URDF 导出 ==========
 
-/** 从三角化数据生成 binary STL（纯数学，无需 OCCT）
- *  @param restInverse Link 静息世界矩阵的逆，将顶点从世界坐标转到 Link 局部坐标
- */
-function generateBinarySTL(
-  solidDataList: import('../types').SerializedSolidData[],
-  restInverse?: THREE.Matrix4,
-  unitScale: number = 1
-): ArrayBuffer {
-  let totalTriangles = 0
-  for (const sd of solidDataList) totalTriangles += sd.indices.length / 3
-
-  const bufferSize = 80 + 4 + totalTriangles * 50
-  const buffer = new ArrayBuffer(bufferSize)
-  const view = new DataView(buffer)
-  let offset = 80
-  view.setUint32(offset, totalTriangles, true)
-  offset += 4
-
-  // 预提取逆矩阵元素用于手动变换（避免每个顶点创建 Vector3）
-  const hasTransform = !!restInverse
-  const me = restInverse?.elements ?? new Float64Array(16)
-
-  for (const sd of solidDataList) {
-    const pos = sd.positions, idx = sd.indices
-    for (let t = 0, n = idx.length / 3; t < n; t++) {
-      const i0 = idx[t * 3], i1 = idx[t * 3 + 1], i2 = idx[t * 3 + 2]
-
-      // 读取三个顶点并可选地变换到 Link 局部坐标
-      let p0x = pos[i0 * 3], p0y = pos[i0 * 3 + 1], p0z = pos[i0 * 3 + 2]
-      let p1x = pos[i1 * 3], p1y = pos[i1 * 3 + 1], p1z = pos[i1 * 3 + 2]
-      let p2x = pos[i2 * 3], p2y = pos[i2 * 3 + 1], p2z = pos[i2 * 3 + 2]
-
-      if (hasTransform) {
-        // M × [x,y,z,1] — 列主序 Matrix4
-        const _p0x = me[0] * p0x + me[4] * p0y + me[8] * p0z + me[12]
-        const _p0y = me[1] * p0x + me[5] * p0y + me[9] * p0z + me[13]
-        const _p0z = me[2] * p0x + me[6] * p0y + me[10] * p0z + me[14]
-        p0x = _p0x; p0y = _p0y; p0z = _p0z
-
-        const _p1x = me[0] * p1x + me[4] * p1y + me[8] * p1z + me[12]
-        const _p1y = me[1] * p1x + me[5] * p1y + me[9] * p1z + me[13]
-        const _p1z = me[2] * p1x + me[6] * p1y + me[10] * p1z + me[14]
-        p1x = _p1x; p1y = _p1y; p1z = _p1z
-
-        const _p2x = me[0] * p2x + me[4] * p2y + me[8] * p2z + me[12]
-        const _p2y = me[1] * p2x + me[5] * p2y + me[9] * p2z + me[13]
-        const _p2z = me[2] * p2x + me[6] * p2y + me[10] * p2z + me[14]
-        p2x = _p2x; p2y = _p2y; p2z = _p2z
-      }
-
-      // 计算面法线
-      const ax = p1x - p0x, ay = p1y - p0y, az = p1z - p0z
-      const bx = p2x - p0x, by = p2y - p0y, bz = p2z - p0z
-      let nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx
-      const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1
-      nx /= len; ny /= len; nz /= len
-
-      view.setFloat32(offset, nx, true); offset += 4
-      view.setFloat32(offset, ny, true); offset += 4
-      view.setFloat32(offset, nz, true); offset += 4
-
-      // 应用单位缩放（mm → m）
-      const sc = unitScale
-      view.setFloat32(offset, p0x * sc, true); offset += 4
-      view.setFloat32(offset, p0y * sc, true); offset += 4
-      view.setFloat32(offset, p0z * sc, true); offset += 4
-      view.setFloat32(offset, p1x * sc, true); offset += 4
-      view.setFloat32(offset, p1y * sc, true); offset += 4
-      view.setFloat32(offset, p1z * sc, true); offset += 4
-      view.setFloat32(offset, p2x * sc, true); offset += 4
-      view.setFloat32(offset, p2y * sc, true); offset += 4
-      view.setFloat32(offset, p2z * sc, true); offset += 4
-
-      view.setUint16(offset, 0, true); offset += 2
-    }
-  }
-  return buffer
-}
-
 async function handleExportURDF(): Promise<void> {
-  // 孤立 Link 警告
-  const orphans = urdfStore.findOrphanLinks()
-  if (orphans.length > 0) {
-    ElMessage.warning(`以下 Link 未被任何 Joint 连接: ${orphans.join(', ')}`)
-  }
-
-  urdfStore.exporting = true
-  urdfStore.exportProgress = '正在生成 URDF...'
-
-  // ★ 修复3：保存并归零所有关节角度，确保以 bind pose 导出
-  const savedValues = urdfStore.robot.joints.map(j => j.currentValue)
-  urdfStore.robot.joints.forEach(j => { j.currentValue = 0 })
-
-  try {
-    const { default: JSZip } = await import('jszip')
-    const zip = new JSZip()
-
-    // ★ 修复4：确保 FK 实例存在（防御性编程）
-    const fk = forwardKinematics ?? new ForwardKinematics()
-    fk.setRobot(urdfStore.robot)
-
-    // 预计算所有 Link 的 restInverse（用于 STL 顶点变换 + URDF 惯性数据变换）
-    const linkRestInverses = new Map<string, THREE.Matrix4>()
-    for (const link of urdfStore.robot.links) {
-      const rest = fk.getLinkRestTransform(link.id)
-      if (rest) {
-        // ★ 修复1：先 clone 再 invert，避免污染 FK 内部缓存
-        linkRestInverses.set(link.id, rest.clone().invert())
-      }
-    }
-
-    // 构建 base_link 坐标系位姿矩阵（position + RPY → 逆矩阵供序列化器变换子关节）
-    let basePoseInverseForExport: THREE.Matrix4 | undefined
-    const bOrigin = urdfStore.baseLinkOrigin
-    const bRPY = urdfStore.baseLinkRPY
-    if (bOrigin || bRPY) {
-      const o = bOrigin ?? [0, 0, 0]
-      const r = bRPY ?? [0, 0, 0]
-      const T = new THREE.Matrix4().makeTranslation(o[0], o[1], o[2])
-      // 使用 RPY 欧拉角构建旋转矩阵（ZYX 顺序，与 URDF rpy 约定一致，与 FrameVisualizer 完全一致）
-      const R = new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(r[0], r[1], r[2], 'ZYX'))
-      const basePoseMatrix = new THREE.Matrix4().multiplyMatrices(T, R)
-      basePoseInverseForExport = basePoseMatrix.clone().invert()
-      // 以 base_link 真实位姿逆覆盖其 restInverse，确保顶点导出坐标正确
-      linkRestInverses.set(urdfStore.BASE_LINK_ID, basePoseInverseForExport)
-    }
-
-    // 生成 URDF XML（传入 restInverse 以变换 inertial COM 到 Link 局部坐标，unitScale: mm→m）
-    const urdfXml = serializeURDF(urdfStore.robot, {
-      linkRestInverses,
-      unitScale: 0.001,
-      basePoseInverse: basePoseInverseForExport,
-      baseLinkId: urdfStore.BASE_LINK_ID
-    })
-    zip.file('robot.urdf', urdfXml)
-
-    // 为每个 Link 生成 STL（顶点从世界坐标变换到 Link 局部坐标）
-    const links = urdfStore.robot.links.filter(l => l.solidIds.length > 0)
-    for (let i = 0; i < links.length; i++) {
-      const link = links[i]
-      urdfStore.exportProgress = `正在生成 ${link.name}.stl (${i + 1}/${links.length})...`
-      // 让 UI 刷新
-      await new Promise(r => setTimeout(r, 0))
-
-      const solidDataList: import('../types').SerializedSolidData[] = []
-      for (const solidId of link.solidIds) {
-        const solid = store.solidMap.get(solidId)
-        if (solid?.serializedData) solidDataList.push(solid.serializedData)
-      }
-      if (solidDataList.length > 0) {
-        const restInverse = linkRestInverses.get(link.id)
-        const stl = generateBinarySTL(solidDataList, restInverse, 0.001)
-        zip.file(`meshes/${link.name}.stl`, stl)
-      }
-    }
-
-    urdfStore.exportProgress = '正在打包 ZIP...'
-    await new Promise(r => setTimeout(r, 0))
-
-    const zipBuffer = await zip.generateAsync({
-      type: 'arraybuffer',
-      compression: 'DEFLATE',
-      compressionOptions: { level: 6 }
-    })
-
-    // 下载
-    const blob = new Blob([zipBuffer], { type: 'application/zip' })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `${urdfStore.robot.name}.zip`
-    a.click()
-    URL.revokeObjectURL(url)
-
-    ElMessage.success('URDF 导出成功')
-    exportCompleteAdVisible.value = true
-  } catch (err) {
-    ElMessage.error(`导出失败: ${(err as Error).message}`)
-  } finally {
-    // ★ 修复3：始终恢复关节角度（即使导出失败）
-    urdfStore.robot.joints.forEach((j, i) => { j.currentValue = savedValues[i] })
-    updateFKAndFrames()
-    urdfStore.exporting = false
-    urdfStore.exportProgress = ''
-  }
+  await urdfScene.handleExportURDF(exportCompleteAdVisible)
 }
 
-// ========== URDF Watchers ==========
+// ========== Watchers ==========
 
 // 深度监听关节所有属性变化（currentValue、origin、axis、limits 等），实时更新 FK
 watch(
   () => urdfStore.robot.joints,
   () => {
-    if (urdfStore.viewMode === 'urdf') {
-      updateFKAndFrames()
-    }
+    urdfScene.updateFKAndFrames()
   },
   { deep: true }
 )
 
 // 监听显示坐标系切换
 watch(() => urdfStore.showFrames, (val) => {
-  frameVisualizer?.setVisible(val)
+  urdfScene.setFrameVisible(val)
   sceneManager?.markDirty()
 })
 
@@ -1260,9 +745,7 @@ watch(() => urdfStore.showFrames, (val) => {
 watch(
   () => urdfStore.robot.links.length,
   () => {
-    if (urdfStore.viewMode === 'urdf') {
-      updateFKAndFrames()
-    }
+    urdfScene.updateFKAndFrames()
   }
 )
 
@@ -1270,10 +753,10 @@ watch(
 watch(
   () => urdfStore.edgePickEditJointId,
   (id, oldId) => {
-    if (id && !edgePickMode) {
-      startEdgePickMode()
-    } else if (!id && edgePickMode) {
-      stopEdgePickMode()
+    if (id && !urdfScene.isEdgePickMode()) {
+      urdfScene.startEdgePickMode()
+    } else if (!id && urdfScene.isEdgePickMode()) {
+      urdfScene.stopEdgePickMode()
     }
   }
 )
@@ -1282,10 +765,7 @@ watch(
 watch(
   () => urdfStore.axisHelperScale,
   (scale) => {
-    if (frameVisualizer && urdfStore.viewMode === 'urdf') {
-      frameVisualizer.setAxisLength(baseAxisLength * scale)
-      updateFKAndFrames()
-    }
+    urdfScene.setAxisLength(scale)
   }
 )
 
@@ -1293,7 +773,7 @@ watch(
 watch(
   () => urdfStore.baseLinkOrigin,
   () => {
-    if (frameVisualizer && urdfStore.viewMode === 'urdf') updateFKAndFrames()
+    urdfScene.updateFKAndFrames()
   },
   { deep: true }
 )
@@ -1302,63 +782,57 @@ watch(
 watch(
   () => urdfStore.baseLinkRPY,
   () => {
-    if (frameVisualizer && urdfStore.viewMode === 'urdf') updateFKAndFrames()
+    urdfScene.updateFKAndFrames()
   },
   { deep: true }
 )
 
-// 监听绑定模式入場 → 高亮目标 Link 已绑定的所有 Solid
+// ★ 统一监听高亮 Solid 列表变化
+// 响应：bindingMode 开关、selectedLinkId/selectedJointId 切换、link.solidIds 增删
+// 替代原来的两个独立 watcher，同时修复 unbind 后高亮残留和取消选择按钮置灰的问题
 watch(
-  () => urdfStore.bindingMode.active,
-  (active) => {
-    if (urdfStore.viewMode !== 'urdf' || !selectionManager) return
+  effectiveHighlightSolidIds,
+  (solidIds) => {
+    if (!selectionManager) return
     isHighlightingFromWatcher = true
     try {
       selectionManager.clearSelection()
-      if (active) {
-        const linkId = urdfStore.bindingMode.targetLinkId
-        if (linkId) {
-          const link = urdfStore.linkMap.get(linkId)
-          link?.solidIds.forEach(sid => selectionManager!.selectBySolidId(sid, true))
-        }
-      } else {
-        // 绑定模式退出：恢复当前选中连杆的高亮
-        if (urdfStore.selectedLinkId) {
-          const link = urdfStore.linkMap.get(urdfStore.selectedLinkId)
-          link?.solidIds.forEach(sid => selectionManager!.selectBySolidId(sid, true))
-        }
-      }
+      solidIds.forEach(sid => selectionManager!.selectBySolidId(sid, true))
     } finally {
       isHighlightingFromWatcher = false
     }
+    // ★ 同步 store.selectedFeatures，确保 Toolbar 的「取消选择」按钮状态正确
+    store.setSelectedFeatures(selectionManager.getSelectedFeatures())
     sceneManager?.markDirty()
   }
 )
 
-// 监听选中 Link 或 Joint 变化 → 原子地更新 3D 高亮（单一 watcher 避免两个独立 watcher 顺序执行导致互相覆盖）
+// ========== Solid Hover / Visibility ==========
+
+/** 模型树 hover solid → 3D 临时高亮 */
+function handleSolidHover(solidId: string | null): void {
+  selectionManager?.hoverBySolidId(solidId)
+  sceneManager?.markDirty()
+}
+
+/** 模型树切换 solid 显示/隐藏 */
+function handleToggleSolidVisibility(solidId: string): void {
+  store.toggleSolidVisibility(solidId)
+  const visible = store.isSolidVisible(solidId)
+  // 通过 SelectionManager 统一处理可见性，同时更新射线检测缓存
+  selectionManager?.setVisibility(solidId, visible)
+  sceneManager?.markDirty()
+}
+
+// 监听 solidVisibilityMap 变化，同步 3D 场景（处理 clearModel 等批量重置场景）
 watch(
-  [() => urdfStore.selectedLinkId, () => urdfStore.selectedJointId] as const,
-  ([linkId, jointId]) => {
-    if (urdfStore.viewMode !== 'urdf' || !selectionManager) return
-    // 绑定模式下已有专属高亮逻辑，不覆盖
-    if (urdfStore.bindingMode.active) return
-    isHighlightingFromWatcher = true
-    try {
-      selectionManager.clearSelection()
-      if (linkId) {
-        const link = urdfStore.linkMap.get(linkId)
-        link?.solidIds.forEach(sid => selectionManager!.selectBySolidId(sid, true))
-      } else if (jointId) {
-        const joint = urdfStore.jointMap.get(jointId)
-        if (joint) {
-          const parentLink = urdfStore.linkMap.get(joint.parentLinkId)
-          const childLink = urdfStore.linkMap.get(joint.childLinkId)
-          parentLink?.solidIds.forEach(sid => selectionManager!.selectBySolidId(sid, true))
-          childLink?.solidIds.forEach(sid => selectionManager!.selectBySolidId(sid, true))
-        }
+  () => store.solidVisibilityMap.size,
+  () => {
+    for (const solid of store.solids) {
+      const visible = store.isSolidVisible(solid.id)
+      if (solid.mesh) {
+        solid.mesh.visible = visible
       }
-    } finally {
-      isHighlightingFromWatcher = false
     }
     sceneManager?.markDirty()
   }
@@ -1368,7 +842,6 @@ watch(
 defineExpose({
   fitView: handleFitView,
   clearSelection: handleClearSelection,
-  clearMeasurements: handleClearMeasurements,
   loadFile: handleFileUpload
 })
 </script>
@@ -1436,6 +909,8 @@ defineExpose({
 }
 
 .status-bar {
+  display: flex;
+  align-items: center;
   padding: 3px 12px;
   font-size: 12px;
   color: #606266;
@@ -1443,6 +918,28 @@ defineExpose({
   border-top: 1px solid #e4e7ed;
   white-space: nowrap;
   overflow: hidden;
-  text-overflow: ellipsis;
+  gap: 0;
+
+  .status-item {
+    flex-shrink: 0;
+
+    b {
+      font-weight: 600;
+      color: #303133;
+    }
+  }
+
+  .status-sep {
+    margin: 0 6px;
+    color: #c0c4cc;
+    flex-shrink: 0;
+  }
+
+  .status-selected {
+    color: #409eff;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
 }
 </style>

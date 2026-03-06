@@ -35,9 +35,6 @@ let workerProxy: Comlink.Remote<StepParseWorkerApi> | null = null
 let workerReady = false
 let workerInitPromise: Promise<void> | null = null
 
-/** Worker 超时时间（120秒，opencascade.js WASM 较大） */
-const WORKER_TIMEOUT = 120_000
-
 /**
  * 获取或创建 Worker 实例和 Comlink 代理（单例）
  */
@@ -134,10 +131,10 @@ export class StepLoader {
       return { valid: false, error: '仅支持 .step 或 .stp 格式文件' }
     }
 
-    // 文件大小限制 (300MB)
-    const maxSize = 300 * 1024 * 1024
+    // 文件大小限制 (500MB)
+    const maxSize = 500 * 1024 * 1024
     if (file.size > maxSize) {
-      return { valid: false, error: '文件大小超过 300MB 限制' }
+      return { valid: false, error: '文件大小超过 500MB 限制' }
     }
 
     return { valid: true, file }
@@ -279,8 +276,7 @@ export class StepLoader {
 
   /**
    * 计算几何体指纹（用于检测重复几何体）
-   * ★ 优化：基于顶点数 + 索引数 + 包围盒尺寸 + 面类型分布 + 顶点距离分布哈希
-   * 防止误合并（不同形状但指标巧合相同）和漏合并（浮点精度差异）
+   * 基于顶点数 + 索引数 + 包围盒尺寸 + 面类型分布
    */
   private computeGeometryFingerprint(solidData: SerializedSolidData): string {
     const posCount = solidData.positions.length / 3
@@ -300,7 +296,7 @@ export class StepLoader {
     const h = (maxY - minY).toFixed(2)
     const d = (maxZ - minZ).toFixed(2)
 
-    // ★ 面类型分布（防止不同形状但包围盒相同的误合并）
+    // 面类型分布（防止不同形状但包围盒相同的误合并）
     const faceTypeCounts: Record<string, number> = {}
     for (const geom of solidData.faceGeometries) {
       faceTypeCounts[geom.type] = (faceTypeCounts[geom.type] || 0) + 1
@@ -310,23 +306,7 @@ export class StepLoader {
       .map(([t, c]) => `${t}${c}`)
       .join(',')
 
-    // ★ 顶点距离分布哈希（旋转无关，尺度归一化）
-    const cx = (maxX + minX) / 2, cy = (maxY + minY) / 2, cz = (maxZ + minZ) / 2
-    const invScale = 1 / (Math.max(maxX - minX, maxY - minY, maxZ - minZ) || 1)
-    const sampleCount = Math.min(posCount, 16)
-    const step = Math.max(1, Math.floor(posCount / sampleCount))
-    const distances: number[] = []
-    for (let s = 0; s < sampleCount; s++) {
-      const i = s * step * 3
-      const dx = (solidData.positions[i] - cx) * invScale
-      const dy = (solidData.positions[i + 1] - cy) * invScale
-      const dz = (solidData.positions[i + 2] - cz) * invScale
-      distances.push(Math.round((dx * dx + dy * dy + dz * dz) * 1000))
-    }
-    distances.sort((a, b) => a - b)
-    const distHash = distances.join(',')
-
-    return `${posCount}_${idxCount}_${faceCount}_${w}_${h}_${d}_${faceTypeStr}_${distHash}`
+    return `${posCount}_${idxCount}_${faceCount}_${w}_${h}_${d}_${faceTypeStr}`
   }
 
   /**
@@ -778,32 +758,6 @@ export class StepLoader {
 
     return geometry
   }
-
-  /**
-   * 创建材质
-   */
-  private createMaterial(solidData: SerializedSolidData): THREE.MeshStandardMaterial {
-    let color = 0x8899aa
-
-    if (solidData.color && solidData.color.length >= 3) {
-      // opencascade.js 颜色已是 0-1 范围
-      color = new THREE.Color(
-        solidData.color[0],
-        solidData.color[1],
-        solidData.color[2]
-      ).getHex()
-    }
-
-    return new THREE.MeshStandardMaterial({
-      color,
-      metalness: 0.3,
-      roughness: 0.6,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 1
-    })
-  }
-
   /**
    * 创建边缘线
    */

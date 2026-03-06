@@ -72,10 +72,15 @@ export class ForwardKinematics {
   }
 
   /**
-   * 计算 Joint 静息矩阵 = T(origin.xyz) × R(origin.rpy)，不含运动分量
+   * 计算 Joint 静息矩阵 = T(origin.xyz + axisOffset) × R(origin.rpy)，不含运动分量
    */
   private computeJointRestMatrix(joint: URDFJoint): THREE.Matrix4 {
-    const translation = new THREE.Matrix4().makeTranslation(...joint.origin.xyz)
+    const offset = joint.axisOffset || [0, 0, 0]
+    const translation = new THREE.Matrix4().makeTranslation(
+      joint.origin.xyz[0] + offset[0],
+      joint.origin.xyz[1] + offset[1],
+      joint.origin.xyz[2] + offset[2]
+    )
     const [roll, pitch, yaw] = joint.origin.rpy
     const euler = new THREE.Euler(roll, pitch, yaw, 'ZYX')
     const rotation = new THREE.Matrix4().makeRotationFromEuler(euler)
@@ -118,13 +123,18 @@ export class ForwardKinematics {
 
   /**
    * 计算单个 Joint 的局部变换矩阵
-   * = T(origin.xyz) × R(origin.rpy) × R(axis, value) 或 T(axis, value)
+   * = T(origin.xyz + axisOffset) × R(origin.rpy) × R(axis, value) 或 T(axis, value)
    */
   private computeJointMatrix(joint: URDFJoint): THREE.Matrix4 {
     const matrix = new THREE.Matrix4()
 
-    // 1. Origin 平移
-    const translation = new THREE.Matrix4().makeTranslation(...joint.origin.xyz)
+    // 1. Origin 平移（包含 axisOffset）
+    const offset = joint.axisOffset || [0, 0, 0]
+    const translation = new THREE.Matrix4().makeTranslation(
+      joint.origin.xyz[0] + offset[0],
+      joint.origin.xyz[1] + offset[1],
+      joint.origin.xyz[2] + offset[2]
+    )
 
     // 2. Origin 旋转 (RPY → ZYX intrinsic = extrinsic XYZ, URDF 标准)
     const [roll, pitch, yaw] = joint.origin.rpy
