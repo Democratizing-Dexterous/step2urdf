@@ -6,8 +6,6 @@ The repository name has been officially changed from `URDFlyS2U` to `step2urdf`.
 
 The online version is [https://step2urdf.top](https://step2urdf.top). Try it!
 
-The domain name is currently undergoing registration. Please temporarily use [https://step2urdf.top:8888](https://step2urdf.top:8888)
-
 ## Privacy & Local Processing
 STEP files are processed entirely on your local machine using your own computational resources. No files are uploaded to external servers. Press F12 to open developer tools and verify that all processing happens locally.
 
